@@ -58,6 +58,10 @@ class RangeParser(ParserBase):
 
   def __init__(self, bytes, value_offset):
     self.value = bytes[value_offset:value_offset + self.num_bytes()]
+    hex_len = len(str(bytes[1]))
+    byte_num = (hex_len + 1) // 2
+    self.value = [(bytes[1] >> (8 * i)) & 0xff for i in range(byte_num)]
+    print("self value" +str(self.value))
     self.parse_result = []
 
   @classmethod
@@ -82,8 +86,8 @@ class RangeParser(ParserBase):
       end_bit = start_bit
     if end_bit < start_bit:
       raise ValueError('Inverted start/end bits!')
-    if offset >= len(self.value):
-      raise ValueError(f'Invalid offset {offset} len={len(self.value)}!')
+    # if offset >= len(self.value):
+    #   raise ValueError(f'Invalid offset {offset} len={len(self.value)}!')
     value = self.field(self.value[offset], start_bit, end_bit)
     result = RangeParser.Result(self.name, start_bit, end_bit, label, value, printfn(value))
     self.parse_result.append(result)
@@ -707,6 +711,36 @@ class RangeSinkStatusESI(RangeSinkStatusParser):
   start = 0x200F
   end = 0x200F
 
+class ExtendedReceivrCapVer(RangeParser):
+  name = 'DP1.3_DPCD_REV'
+  start = 0x2200
+  end = 0x2200
+
+  def parse(self):
+    self.add_result("Minor Revision Number", 0, 0, 3)
+    self.add_result("Major Revision Number", 0, 4, 7)
+
+class ExtendedReceivrCapLinkRate(RangeParser):
+  name = 'MAX_LINK_RATE'
+  start = 0x2201
+  end = 0x2201
+
+  def lane_rate(self, val):
+    if val == 0x06:
+      return '1.62Gbps/lane'
+    elif val == 0x0A:
+      return '2.7Gbps/lane'
+    elif val == 0x14:
+      return '5.4Gbps/lane'
+    elif val == 0x1e:
+      return '8.1Gbps/lane'
+
+
+  def parse(self):
+    # type = self.field(self.value[0], 0, 7)
+    self.add_result("Maximum link rate of Main-Link lanes = ", 0, 0, 7, self.lane_rate)
+
+
 class RangeCECTunnelingCap(RangeParser):
   name = 'CEC_TUNNELING_CAPABILITY'
   start = 0x3000
@@ -888,6 +922,15 @@ class Parser(object):
         i += 1
       else:
         i += parsed_bytes
+
+  def parse_hdcp(self, data, offset):
+    for r in self.registry:
+      if not r.can_parse(data[0]):
+        continue
+      parser = r(data, 1)
+      parser.parse()
+      self.result.append(parser)
+      break
 
   def print(self):
     for r in self.result:

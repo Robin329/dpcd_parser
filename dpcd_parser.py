@@ -23,6 +23,12 @@ def log_bytes_to_list(log_bytes):
     ret.append(int(b, 16))
   return ret
 
+def cmdline_to_list(params):
+  ret = []
+  for b in params.split(' '):
+    ret.append(int(b, 16))
+  return ret
+
 def log_reader():
   patt_ts = r'(?:.{16}-[0-9]+\s+\[[0-9]+\] .{4}\s+([0-9]+\.[0-9]+): drm_trace_printf:)'
   patt_legacy_ts = r'(?:\[\s*(?:[0-9]+\s+)?([0-9]+\.[0-9]+)\])'
@@ -62,6 +68,7 @@ def log_reader():
 def main():
   arg_parser = argparse.ArgumentParser(description='Parse DPCD registers')
   arg_parser.add_argument('--dpcd', help='DPCD values, base16 space separated', default=None)
+  arg_parser.add_argument('-p','--parse', help='Read DPCD registers value and parse them',  default=None)
   arg_parser.add_argument('--logs', help='Read logs from stdin', action='store_true', default=False)
   args = arg_parser.parse_args()
 
@@ -73,6 +80,17 @@ def main():
 
   if args.logs:
     data = log_reader()
+
+  if args.parse:
+      print(args.parse)
+      p = parser.Parser()
+      data = cmdline_to_list(args.parse)
+      if 2 > len(data):
+          print("Error, args len is " + str(len(data)))
+          return
+      # print(data)
+      p.parse_hdcp(data, 0)
+      p.print()
 
 if __name__ == '__main__':
   main()
