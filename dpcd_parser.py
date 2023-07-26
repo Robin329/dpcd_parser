@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 import argparse
 import collections
 import re
@@ -25,14 +25,23 @@ def log_bytes_to_list(log_bytes):
     return ret
 
 
-def cmdline_to_list(params):
-    ret = []
-    pattern = r'0x[0-9A-Fa-f]+'
-    matches = re.findall(pattern, params)
-    for match in matches:
-        ret.append(int(match, 16))
-    return ret
+def cmdline_to_list(addr, params):
+    # Remove the "0x" prefix from the input parameters if it exists
+    params = params.replace("0x", "")
 
+    # Calculate the number of bytes based on the length of the input parameters
+    num_bytes = (len(params) + 1) // 2
+
+    # Pad the input parameters with leading zeros to make sure it has even length
+    params = params.zfill(num_bytes * 2)
+
+    # Split the input parameters into individual bytes and convert them to integers
+    byte_values = [int(params[i:i + 2], 16) for i in range(0, len(params), 2)]
+
+    # Insert the first address value at the beginning of the list
+    byte_values.insert(0, int(addr, 16))
+
+    return byte_values
 
 def log_reader():
     patt_ts = r'(?:.{16}-[0-9]+\s+\[[0-9]+\] .{4}\s+([0-9]+\.[0-9]+): drm_trace_printf:)'
@@ -77,7 +86,9 @@ def main():
     arg_parser.add_argument(
         '--dpcd', help='DPCD values, base16 space separated', default=None)
     arg_parser.add_argument(
-        '-p', '--parse', help='Read DPCD registers value and parse them',  default=None)
+        '-m', help='DPCD Field Address Mapping', action='store_true', default=None)
+    arg_parser.add_argument(
+        '-p', '--parse', help='Read DPCD registers value and parse them. [dpcd_parser.py -p 0x3000  0x1]',  default=None)
     arg_parser.add_argument(
         '--logs', help='Read logs from stdin', action='store_true', default=False)
     args = arg_parser.parse_args()
@@ -92,15 +103,21 @@ def main():
         data = log_reader()
 
     if args.parse:
-        print(args.parse)
+        params = args.parse.split()
+        print("addr:" + params[0] + " value:" + params[1])
         p = parser_hpcd.Parser()
-        data = cmdline_to_list(args.parse)
+        data = cmdline_to_list(params[0], params[1])
         if 2 > len(data):
             print("Error, args len is " + str(len(data)))
+            print("./" + arg_parser.prog + " -p 0x3000  0x1")
             return
-        # print(data)
-        p.parse_hdcp(data, 0)
+        print(data)
+        p.parse_hdcp(data)
         p.print()
+
+    if args.m:
+        p = parser_hpcd.Parser()
+        p.print_mapping()
 
 
 if __name__ == '__main__':

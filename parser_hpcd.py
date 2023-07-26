@@ -60,11 +60,14 @@ class RangeParser(ParserBase):
     end = None
 
     def __init__(self, bytes, value_offset):
+        print("value_offset: {}".format(value_offset))
         self.value = bytes[value_offset:value_offset + self.num_bytes()]
-        hex_len = len(str(bytes[1]))
-        byte_num = (hex_len + 1) // 2
-        self.value = [(bytes[1] >> (8 * i)) & 0xff for i in range(byte_num)]
-        print("self value" + str(self.value))
+        print("self.value: {}".format(self.value))
+        print("bytes: {}".format(bytes))
+        byte_num = len(bytes) - 1
+        print("byte_num: {}".format(byte_num))
+        self.value = bytes[1:]
+        print("self.value: {}".format(self.value))
         self.parse_result = []
 
     @classmethod
@@ -90,7 +93,7 @@ class RangeParser(ParserBase):
         if end_bit < start_bit:
             raise ValueError('Inverted start/end bits!')
         if offset >= len(self.value):
-          raise ValueError(f'Invalid offset {offset} len={len(self.value)}!')
+            raise ValueError(f'Invalid offset {offset} len={len(self.value)}!')
         value = self.field(self.value[offset], start_bit, end_bit)
         result = RangeParser.Result(
             self.name, start_bit, end_bit, label, value, printfn(value))
@@ -465,6 +468,32 @@ class RangeDetailedCapInfoDFP3(RangeDetailedCapInfo):
     end = 0x8F
 
 
+class FecCap(RangeParser):
+    name = "Fec Capability.(New to DP v1.4)"
+    start = 0x90
+    end = 0x90
+
+    def parse(self):
+        self.add_result('FEC_CAPABLE', 0, 0,
+                        printfn=lambda x: 'Capable' if x else 'Not capable')
+        self.add_result('UNCORRECTED_BLOCK_ERROR_COUNT_CAPABLE(Support required for an FEC-capable DPRX)  ', 0,
+                        1, printfn=lambda x: 'Capable' if x else 'Not capable')
+        self.add_result('CORRECTED_BLOCK_ERROR_COUNT_CAPABLE', 0, 2,
+                        printfn=lambda x: 'Capable' if x else 'Not capable')
+        self.add_result('BIT_ERROR_COUNT_CAPABLE', 0, 3,
+                        printfn=lambda x: 'Capable' if x else 'Not capable')
+        self.add_result('Reserved', 0, 4, 7)
+
+
+class Reserved(RangeParser):
+    name = 'Reserved'
+    start = 0x91
+    end = 0xFF
+
+    def parse(self):
+        self.add_result("Reserved", 0, 0, 7)
+
+
 class RangePanelReplayCap(RangeParser):
     name = 'PANEL_REPLAY_CAPABILITY_SUPPORTED'
     start = 0xB0
@@ -475,7 +504,7 @@ class RangePanelReplayCap(RangeParser):
         self.add_result('Selective Update Support', 0, 1)
         self.add_result('Replay Support', 0, 0)
         self.add_result('Reserved', 1, 6, 7)
-        self.add_result('Selective Update Granularity', 1, 5,
+        self.add_result('Selective Update Granularity', 1, 5, 5,
                         lambda x: 'Required' if x else 'Not Required')
         self.add_result('Reserved', 1, 0, 4)
 
@@ -487,6 +516,284 @@ class RangeSinkCountParser(RangeParser):
         self.add_result('SINK_COUNT', 0, 0, 5)
 
 
+class LinkConfigField(RangeParser):
+    name = 'Main-Link Bandwidth Setting = Value x 0.27Gbps/lane'
+    start = 0x100
+    end = 0x100
+
+    def lane_rate(self, val):
+        if val == 0x06:
+            return '1.62Gbps/lane'
+        elif val == 0x0A:
+            return '2.7Gbps/lane'
+        elif val == 0x14:
+            return '5.4Gbps/lane'
+        elif val == 0x1e:
+            return '8.1Gbps/lane'
+
+    def parse(self):
+        self.add_result("LINK_BW_SET = ",
+                        0, 0, 7, self.lane_rate)
+
+
+class LinkConfigFieldLaneCount(RangeParser):
+    name = 'Main-Link Lane Count = Value.'
+    start = 0x101
+    end = 0x101
+
+    def lane_num(self, val):
+        if val == 0x1:
+            return '1 lane (Lane 0 only)'
+        elif val == 0x2:
+            return '2 lanes (Lanes 0 and 1 only)'
+        elif val == 0x4:
+            return '4 lanes (Lanes 0, 1, 2, and 3)'
+
+    def parse(self):
+        self.add_result('LANE_COUNT_SET', 0, 0, 4, self.lane_num)
+        self.add_result('POST_LT_ADJ_REQ_GRANTED', 0, 5, 5)
+        self.add_result('Reserved', 0, 6, 6)
+        self.add_result('ENHANCED_FRAME_EN', 0, 7, 7,
+                        lambda x: 'Enable Enhanced Framing symbol sequence' if x else "Disable Enhanced Framing symbol sequence")
+
+
+class LinkConfigFieldTrainingPattern(RangeParser):
+    name = 'TRAINING_PATTERN_SET'
+    start = 0x102
+    end = 0x102
+
+    def pattern(self, val):
+        if val == 0x1:
+            return 'Link Training Pattern Sequence 1.'
+        elif val == 0x0:
+            return 'Training not in progress (or disabled).'
+        elif val == 0x2:
+            return 'Link Training Pattern Sequence 2.'
+        elif val == 0x3:
+            return 'Link Training Pattern Sequence 3.'
+        elif val == 0b0111:
+            return 'Link Training Pattern Sequence 4.'
+
+    def errcount(self, val):
+        if val == 0b00:
+            return 'Count Disparity and Illegal Symbol errors.'
+        elif val == 0b01:
+            return 'Count Disparity errors only.'
+        elif val == 0b10:
+            return 'Count Illegal Symbol errors only.'
+        elif val == 0b11:
+            return 'Reserved.'
+
+    def parse(self):
+        self.add_result('Link Training Pattern Selection.',
+                        0, 0, 3, self.pattern)
+        self.add_result('RECOVERED_CLOCK_OUT_EN', 0, 4, 4,
+                        lambda x: 'Recovered clock output from a test pad of DPRX is enabled.' if x else 'Recovered clock output from a test pad of DPRX is not enabled')
+        self.add_result('SCRAMBLING_DISABLE', 0, 5, 5,
+                        lambda x: 'DPTX scrambles data symbols before transmission.' if x else 'DPTX disables scrambler and transmits all symbols without scrambling.')
+        self.add_result('SYMBOL_ERROR_COUNT_SEL', 0, 6, 7,  self.errcount)
+
+
+class LinkConfigFieldTrainingLaneSet(RangeParser):
+    def voltage(self, val):
+        if val == 0b00:
+            return 'Voltage swing level 0.'
+        elif val == 0b01:
+            return 'Voltage swing level 1.'
+        elif val == 0b10:
+            return 'Voltage swing level 2.'
+        elif val == 0b11:
+            return 'Voltage swing level 3.'
+
+    def pre_emphasis(self, val):
+        if val == 0b00:
+            return 'Pre-emphasis level 0.'
+        elif val == 0b01:
+            return 'Pre-emphasis level 1.'
+        elif val == 0b10:
+            return 'Pre-emphasis level 2.'
+        elif val == 0b11:
+            return 'Pre-emphasis level 3.'
+
+    def parse(self):
+        self.add_result('VOLTAGE SWING SET', 0, 0, 1, self.voltage)
+        self.add_result('MAX_SWING_REACHED', 0, 2)
+        self.add_result('PRE-EMPHASIS_SET', 0, 3, 4, self.pre_emphasis)
+        self.add_result('MAX_PRE-EMPHASIS_REACHED', 0, 5, 5)
+
+
+class LinkConfigFieldTrainingLane0(LinkConfigFieldTrainingLaneSet):
+    name = 'TRAINING_LANE0_SET'
+    start = 0x103
+    end = 0x103
+
+
+class LinkConfigFieldTrainingLane1(LinkConfigFieldTrainingLaneSet):
+    name = 'TRAINING_LANE1_SET'
+    start = 0x104
+    end = 0x104
+
+
+class LinkConfigFieldTrainingLane2(LinkConfigFieldTrainingLaneSet):
+    name = 'TRAINING_LANE2_SET'
+    start = 0x105
+    end = 0x105
+
+
+class LinkConfigFieldTrainingLane3(LinkConfigFieldTrainingLaneSet):
+    name = 'TRAINING_LANE3_SET'
+    start = 0x106
+    end = 0x106
+
+
+class LinkConfigFieldDownSpread(RangeParser):
+    name = 'DOWNSPREAD_CTRL'
+    start = 0x107
+    end = 0x107
+
+    def parse(self):
+        self.add_result('RESERVED', 0, 0, 3)
+        self.add_result('SPREAD_AMP', 0, 4, 4,
+                        lambda x: ' Main-Link signal is not down-spread' if x else ' Main-Link signal is down-spread by equal to or less than 0.5 % with a modulation frequency in the range of 30 to 33kHz.')
+        self.add_result('RESERVED', 0, 5, 6)
+        self.add_result('MSA_TIMING_PAR_IGNORE_EN', 0, 7, 7,
+                        lambda x: """Source device sends valid data for MSA timing parameters HTotal[15:0], HStart[15:0], HSyncPolarity[0]( HSP), HSyncWidth[14:0](HSW), VTotal[15:0], VStart[15:0], VSyncPolarity[0](VSP), and VSyncWidth[14:0](VSW)""" if x else """Source device may send invalid data for the above-mentioned MSA timing parameters. The Sink device must ignore these parameters and regenerate the incoming video stream without depending on these parameters. (This bit can be set to 1 only if the MSA_TIMING_PAR_IGNORED bit in the DOWN_STREAM_PORT_COUNT register (DPCD Address 00007h, bit 6) is set to 1""")
+
+
+class LinkConfigFieldChannelCoding(RangeParser):
+    name = 'MAIN_LINK_CHANNEL_CODING_SET'
+    start = 0x108
+    end = 0x108
+
+    def parse(self):
+        self.add_result('SET_ANSI 8b/10b', 0, 0)
+        self.add_result('RESERVED', 0, 1, 7)
+
+
+class LinkConfigFieldChannelCoding(RangeParser):
+    name = 'I2C Speed Control/Status Bit Map'
+    start = 0x109
+    end = 0x109
+
+    def i2cspeed(self, val):
+        if val == 0b1:
+            return '1Kbps.'
+        elif val == 0b10:
+            return '5Kbps.'
+        elif val == 0b100:
+            return '10Kbps.'
+        elif val == 0b1000:
+            return '100Kbps.'
+        elif val == 0b10000:
+            return '400Kbps.'
+        elif val == 0b100000:
+            return '1Mbps.'
+        elif val == 0b1000000:
+            return 'RESERVED.'
+        elif val == 0b10000000:
+            return 'RESERVED.'
+
+    def parse(self):
+        self.add_result('I2C speeds', 0, 0, 7, self.i2cspeed)
+
+
+class LinkConfigFieldeDPSet(RangeParser):
+    name = 'eDP_CONFIGURATION_SET(For eDP Sink)'
+    start = 0x10A
+    end = 0x10A
+
+    def parse(self):
+        self.add_result('ALTERNATE_SCRAMBLER_RESET_ENABLE', 0, 0)
+        self.add_result('RESERVED', 0, 0, 1)
+        self.add_result('RESERVED', 0, 2, 6)
+        self.add_result('PANEL_SELF_TEST_ENABLE', 0, 7, 7,
+                        lambda x: "Enable" if x else 'Disable')
+
+
+class LinkConfigFieldLinkQualLane(RangeParser):
+    def qual_pattern(self, val):
+        if val == 0b00:
+            return 'Link quality test pattern not transmitted.'
+        elif val == 0b01:
+            return 'D10.2 test pattern(unscrambled) transmitted(same as Link Training Pattern Sequence 1)'
+        elif val == 0b10:
+            return 'Symbol Error Rate Measurement Pattern transmitted.'
+        elif val == 0b11:
+            return 'PRBS7 transmitted.'
+        elif val == 0b100:
+            return '80-bit custom pattern transmitted.'
+        elif val == 0b101:
+            return 'CP2520 (HBR2 Compliance EYE pattern) transmitted.'
+        elif val == 0b110 or val == 0b111:
+            return 'Reserved.'
+
+    def parse(self):
+        self.add_result('LINK_QUAL_PATTERN_SET', 0, 0, 2, self.qual_pattern)
+        self.add_result('Reserved', 0, 3, 7)
+
+
+class LinkConfigFieldLinkQualLane0Set(LinkConfigFieldLinkQualLane):
+    name = 'LINK_QUAL_LANE0_SET'
+    start = 0x10B
+    end = 0x10B
+
+
+class LinkConfigFieldLinkQualLane1Set(LinkConfigFieldLinkQualLane):
+    name = 'LINK_QUAL_LANE1_SET'
+    start = 0x10C
+    end = 0x10C
+
+
+class LinkConfigFieldLinkQualLane2Set(LinkConfigFieldLinkQualLane):
+    name = 'LINK_QUAL_LANE2_SET'
+    start = 0x10D
+    end = 0x10D
+
+
+class LinkConfigFieldLinkQualLane3Set(LinkConfigFieldLinkQualLane):
+    name = 'LINK_QUAL_LANE3_SET'
+    start = 0x10E
+    end = 0x10E
+
+
+class PrintReserved(RangeParser):
+    def parse(self):
+        self.add_result('Reserved', 0, 0, 7)
+
+
+class LinkConfigFieldReserved(PrintReserved):
+    name = 'Reserved'
+    start = 0x10F
+    end = 0x110
+
+
+class LinkCfgMstCtl(RangeParser):
+    name = 'MSTM_CTRL'
+    start = 0x111
+    end = 0x111
+
+    def parse(self):
+        self.add_result(
+            'MST_EN', 0, 0, 0, lambda x: 'Single Stream Format' if x else 'Multi-Stream Format')
+        self.add_result('UP_REQ_EN', 0, 1, 1, lambda x: 'Allows the Downstream DPRX to originating/forwarding an UP_REQ message transaction ' if x else 'Prohibits the Downstream DPRX from originating/forwarding an UP_REQ message transaction')
+        self.add_result('UPSTREAM_IS_SRC', 0, 2, 2, lambda x: 'Set to 1 by a DP Source device to indicate to the downstream device the presence of a Source device, not a Branch device' if x else 'Upstream device is either a Source device predating DP Standard Ver.1.2 or a Branch device')
+        self.add_result('Reserved', 0, 3, 7)
+
+
+class LinkCfgAudioDelay(RangeParser):
+    name = 'AUDIO_DELAY'
+    start = 0x112
+    end = 0x114
+
+    def parse(self):
+        self.add_result('AUDIO_DELAY[7:0]', 0, 0, 7)
+        self.add_result('AUDIO_DELAY[15:8]', 1, 0, 7)
+        self.add_result('AUDIO_DELAY[23:16]', 2, 0, 7)
+
+
+# --------------------------------------
+# 0x200
+# --------------------------------------
 class RangeSinkCount(RangeSinkCountParser):
     name = 'SINK_COUNT'
     start = 0x200
@@ -832,11 +1139,11 @@ class ExtendedReceivrCapMaxLaneCount(RangeParser):
 
     def lane_num(self, val):
         if val == 0x1:
-          return 'One lane (Lane 0 only)'
+            return 'One lane (Lane 0 only)'
         elif val == 0x2:
-          return 'Two lanes (Lanes 0 and 1 only)'
+            return 'Two lanes (Lanes 0 and 1 only)'
         elif val == 0x4:
-          return 'Four lanes (Lanes 0, 1, 2, and 3)'
+            return 'Four lanes (Lanes 0, 1, 2, and 3)'
 
     def parse(self):
         self.add_result('Maximum number of lanes = ', 0, 0, 4, self.lane_num)
@@ -1024,6 +1331,39 @@ class RangeCPReserved(RangeParser):
         self.add_result('Reserved', 0, 0, 7)
 
 
+def print_dpcd_address_mapping():
+    addr_mapping = """
+                Table 2-154: DPCD Field Address Mapping
+    -------------------------------------------------------------------
+      DPCD Address    |        DPCD Field                |    See
+    -------------------------------------------------------------------
+    00000h - 000FFh   |   Receiver Capability            |  Table 2-155
+    00100h - 001FFh   |   Link Configuration             |  Table 2-156
+    00200h - 002FFh   |   Link/Sink Device Status        |  Table 2-157
+    00300h - 003FFh   |   Source Device-specific         |  Table 2-158
+    00400h - 004FFh   |   Sink Device-specific           |  Table 2-159
+    00500h - 005FFh   |   Branch Device-specific         |  Table 2-160
+    00600h - 006FFh   |   Link/Sink Device Power Control |  Table 2-161
+    00700h - 007FFh   |   eDP-specific                   |  Table 2-162
+    00800h - 00FFFh   |   RESERVED (usage to be defined) |      –
+    01000h - 017FFh   |   Sideband MSG Buffers           |  Table 2-163
+    01800h - 01FFFh   |   RESERVED (usage to be defined) |      –
+    02000h - 021FFh   |   DPRX Event Status Indicator    |  Table 2-164
+    02200h - 022FFh   |   Extended Receiver Capability   |  Table 2-165
+    02300h - 02FFFh   |   RESERVED (usage to be defined) |      –
+    03000h - 030FFh   |   Protocol Converter Extension   |  Table 2-166
+    03100h - 5FFFFh   |   RESERVED (usage to be defined) |      –
+    60000h - 61CFFh   |   Multi-touch (for eDP)          |  Table 2-167
+    61D00h - 67FFFh   |   RESERVED (usage to be defined) |      –
+    68000h - 69FFFh   |   HDCP 1.3 and HDCP2.2           |  Table 2-168
+    6A000h - EFFFFh   |   RESERVED (usage to be defined) |      –
+    F0000h - F02FFh   |   LT-tunable PHY Repeater        |  Table 2-169
+    F0300h - FFEFFh   |   RESERVED (usage to be defined) |      –
+    FFF00h - FFFFFh   |   MyDP-specific                  |  Table 2-170
+    """
+    print(addr_mapping)
+
+
 class Parser(object):
     def __init__(self):
         self.registry = self.build_registry(ParserBase)
@@ -1038,6 +1378,9 @@ class Parser(object):
         if not ret:
             ret.append(cls)
         return ret
+
+    def print_mapping(self):
+        print_dpcd_address_mapping()
 
     def parse(self, bytes, offset):
         i = 0
@@ -1060,7 +1403,7 @@ class Parser(object):
             else:
                 i += parsed_bytes
 
-    def parse_hdcp(self, data, offset):
+    def parse_hdcp(self, data):
         for r in self.registry:
             if not r.can_parse(data[0]):
                 continue
@@ -1070,10 +1413,12 @@ class Parser(object):
             break
 
     def print(self):
+        print("-----------------------------------------------------------")
         for r in self.result:
             r.print()
 
         if not self.unparsed:
+            print("-----------------------------------------------------------")
             return
 
         print('')
@@ -1082,3 +1427,4 @@ class Parser(object):
             print('{:<10}{:<41}[{}]'.format(hex(a),
                                             'UNKNOWN',
                                             hex(v)))
+        print("-----------------------------------------------------------")
