@@ -104,7 +104,11 @@ def main():
 
     if args.parse:
         params = args.parse.split()
-        print("addr:" + params[0] + " value:" + params[1])
+        if len(params) == 2:
+            print("addr:" + params[0] + " value:" + params[1])
+        else:
+            print("Error, args len is " + str(len(params)))
+            return
         p = parser_hpcd.Parser()
         data = cmdline_to_list(params[0], params[1])
         if 2 > len(data):

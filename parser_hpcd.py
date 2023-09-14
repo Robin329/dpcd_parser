@@ -1,5 +1,30 @@
 import collections
+from enum import Enum
 
+class DebugLevel(Enum):
+    ERROR = 0
+    WARN = 1
+    INFO = 2
+    DEBUG = 3
+
+def dpcd_print( debug_level = DebugLevel.INFO, msg = "", verbose = False):
+    """
+    print debug message, Print only if the given
+    level is less than or equal to the specified debug level
+
+    Args:
+         msg (str): The message to print.
+         debug_level (int): debug level, integer. Default is 1.
+         verbose (bool): Whether to enable verbose output. If True, the debug level will be ignored.
+    """
+    debug_levels = {
+        DebugLevel.ERROR: "ERR  :",
+        DebugLevel.WARN:  "WARN :",
+        DebugLevel.INFO:  "INFO :",
+        DebugLevel.DEBUG: "DEBUG:"
+    }
+    debug_string = debug_levels.get(debug_level, "INFO :")
+    print(f"{debug_string} {msg}")
 
 class ParserBase(object):
     pass
@@ -18,12 +43,13 @@ class MultiByteParser(ParserBase):
 
     def __init__(self, bytes, value_offset):
         self.value = bytes[value_offset:value_offset + self.num_bytes()]
-        print("MultiByteParser")
+        dpcd_print(DebugLevel.DEBUG, "MultiByteParser")
         self.output = None
 
     @classmethod
     def can_parse(cls, start):
         # TODO: add partial parsing support
+        dpcd_print(DebugLevel.INFO, "start:" + hex(start) + " cls.start:" + hex(cls.start) + " cls.end:" + hex(cls.end))
         if start >= cls.start and start <= cls.end:
             return True
         return False
@@ -60,14 +86,14 @@ class RangeParser(ParserBase):
     end = None
 
     def __init__(self, bytes, value_offset):
-        print("value_offset: {}".format(value_offset))
+        dpcd_print(DebugLevel.DEBUG,"value_offset: {}".format(value_offset))
         self.value = bytes[value_offset:value_offset + self.num_bytes()]
-        print("self.value: {}".format(self.value))
-        print("bytes: {}".format(bytes))
+        dpcd_print(DebugLevel.DEBUG,"self.value: {}".format(self.value))
+        dpcd_print(DebugLevel.DEBUG,"bytes: {}".format(bytes))
         byte_num = len(bytes) - 1
-        print("byte_num: {}".format(byte_num))
+        dpcd_print(DebugLevel.DEBUG,"byte_num: {}".format(byte_num))
         self.value = bytes[1:]
-        print("self.value: {}".format(self.value))
+        dpcd_print(DebugLevel.DEBUG,"self.value: {}".format(self.value))
         self.parse_result = []
 
     @classmethod
@@ -792,7 +818,7 @@ class LinkCfgAudioDelay(RangeParser):
 
 
 # --------------------------------------
-# 0x200
+# 0x200 - 0x2ff
 # --------------------------------------
 class RangeSinkCount(RangeSinkCountParser):
     name = 'SINK_COUNT'
@@ -891,56 +917,97 @@ class MultiByteIEEEOUI(MultiByteParser):
                         hex(x[2])[2:]))
 
 
-class MultiByteSinkIEEEOUI(MultiByteIEEEOUI):
-    name = 'Sink IEEE_OUI'
-    start = 0x400
-    end = 0x402
+class RangeFirmwareMajorRevision(RangeParser):
+    def parse(self):
+        self.add_result('Revision', 0, 0, 7)
 
 
 class MultiByteDeviceId(MultiByteParser):
     def parse(self):
         self.add_result(lambda x: '"{}"'.format(bytes(x).decode('utf-8')))
 
+class RangeHardwareRevision(RangeParser):
+    def parse(self):
+        self.add_result('Minor Revision', 0, 0, 3)
+        self.add_result('Major Revision', 0, 4, 7)
+
+class RangeFirmwareMinorRevision(RangeParser):
+    def parse(self):
+        self.add_result('Revision', 0, 0, 7)
+
+# --------------------------------------
+# 0x300 - 0x3ff
+# --------------------------------------
+#  "0x300 0x00000"
+class SourceDevspecFieldMultiByteSinkIEEEOUI(MultiByteIEEEOUI):
+    name = 'Source IEEE_OUI'
+    start = 0x300
+    end = 0x302
+
+class SourceDevspecFieldMultiByteSinkDeviceId(MultiByteDeviceId):
+    name = 'Source Device Identification String'
+    start = 0x303
+    end = 0x308
+
+
+class SourceFieldRangeSinkHardwareRevision(RangeHardwareRevision):
+    name = 'Source Hardware Revision'
+    start = 0x309
+    end = 0x309
+
+class SourceDevspecFieldRangeSinkFirmwareMajorRevision(RangeFirmwareMajorRevision):
+    name = 'Source Firmware Major Revision'
+    start = 0x30A
+    end = 0x30A
+
+
+class SourceDevspecFieldRangeFirmwareMinorRevision(RangeParser):
+    def parse(self):
+        self.add_result('Revision', 0, 0, 7)
+
+
+class SourceDevspecFieldRangeSinkFirmwareMinorRevision(RangeFirmwareMinorRevision):
+    name = 'Source Firmware Minor Revision'
+    start = 0x30B
+    end = 0x30B
+
+
+class SourceDevspecFieldMultiByteReserved40C(MultiByteParser):
+    name = 'RESERVED'
+    start = 0x30C
+    end = 0x3FF
+
+    def parse(self):
+        self.add_result()
+
+
+# --------------------------------------
+# 0x400 - 0x4ff
+# --------------------------------------
+class MultiByteSinkIEEEOUI(MultiByteIEEEOUI):
+    name = 'Sink IEEE_OUI'
+    start = 0x400
+    end = 0x402
 
 class MultiByteSinkDeviceId(MultiByteDeviceId):
     name = 'Sink Device Identification String'
     start = 0x403
     end = 0x408
 
-
-class RangeHardwareRevision(RangeParser):
-    def parse(self):
-        self.add_result('Minor Revision', 0, 0, 3)
-        self.add_result('Major Revision', 0, 4, 7)
-
-
 class RangeSinkHardwareRevision(RangeHardwareRevision):
     name = 'Sink Hardware Revision'
     start = 0x409
     end = 0x409
-
-
-class RangeFirmwareMajorRevision(RangeParser):
-    def parse(self):
-        self.add_result('Revision', 0, 0, 7)
-
 
 class RangeSinkFirmwareMajorRevision(RangeFirmwareMajorRevision):
     name = 'Sink Firmware Major Revision'
     start = 0x40A
     end = 0x40A
 
-
-class RangeFirmwareMinorRevision(RangeParser):
-    def parse(self):
-        self.add_result('Revision', 0, 0, 7)
-
-
 class RangeSinkFirmwareMinorRevision(RangeFirmwareMinorRevision):
     name = 'Sink Firmware Minor Revision'
     start = 0x40B
     end = 0x40B
-
 
 class MultiByteReserved40C(MultiByteParser):
     name = 'RESERVED'
@@ -950,7 +1017,9 @@ class MultiByteReserved40C(MultiByteParser):
     def parse(self):
         self.add_result()
 
-
+# --------------------------------------
+# 0x500 - 0x5ff
+# --------------------------------------
 class MultiByteBranchIEEEOUI(MultiByteIEEEOUI):
     name = 'Branch IEEE_OUI'
     start = 0x500
@@ -980,7 +1049,57 @@ class RangeBranchFirmwareMinorRevision(RangeFirmwareMinorRevision):
     start = 0x50B
     end = 0x50B
 
+class BranchMultiByteReserved40C(MultiByteParser):
+    name = 'RESERVED'
+    start = 0x50C
+    end = 0x5FF
 
+    def parse(self):
+        self.add_result()
+# --------------------------------------
+# 0x600 - 0x6ff
+# --------------------------------------
+class SinkDevPowerCtrlField(RangeParser):
+    name = "SET_POWER & SET_DP_PWR_VOLTAGE"
+    start = 0x600
+    end = 0x600
+
+    def power_state(self, val):
+        if val == 0b001:
+            return "Sink devices to D0(normal)"
+        elif val == 0b010:
+            return "Sink devices to D3(powe-down)"
+        elif val == 0b101:
+            return "Sink devices to D3, AUX block fully powered."
+        else:
+            return "Reserved"
+
+    def parse(self):
+        self.add_result('SET_POWER_STATE', 0, 0, 2, self.power_state)
+        self.add_result('RESERVED', 0, 3, 4)
+        self.add_result('SET_DN_DEVICE_DP_PWR_5V', 0, 5, 5, lambda x: "DP_PWR 5V" if x else "None")
+        self.add_result('SET_DN_DEVICE_DP_PWR_12V', 0, 6, 6, lambda x: "DP_PWR 12V" if x else "None")
+        self.add_result('SET_DN_DEVICE_DP_PWR_18V', 0, 7, printfn=lambda x: '{}'.format('DP_PWR 18V' if x else 'None'))
+
+class BranchMultiByteReserved40C(MultiByteParser):
+    name = 'RESERVED'
+    start = 0x601
+    end = 0x6FF
+
+    def parse(self):
+        self.add_result()
+
+# --------------------------------------
+# 0x700 - 0x7ff
+# --------------------------------------
+class BranchMultiByteReserved40C(PrintReserved):
+    name = 'RESERVED for EDP'
+    start = 0x701
+    end = 0x7FF
+
+# --------------------------------------
+# 0x1000 - 0x17ff
+# --------------------------------------
 class MultiByteDownRequest(MultiByteParser):
     name = 'DOWN_REQ'
     start = 0x1000
@@ -1016,6 +1135,13 @@ class MultiByteUpRequest(MultiByteParser):
     def parse(self):
         self.add_result()
 
+# --------------------------------------
+# 0x2000 - 0x21ff
+# --------------------------------------
+class DPRXEventMultiByteReserved40C(PrintReserved):
+    name = 'RESERVED'
+    start = 0x2000
+    end = 0x2001
 
 class RangeSinkCountESI(RangeSinkCountParser):
     name = 'SINK_COUNT_ESI'
@@ -1100,6 +1226,16 @@ class RangeSinkStatusESI(RangeSinkStatusParser):
     start = 0x200F
     end = 0x200F
 
+class DPRXEventStatusMultiByteReserved40C(PrintReserved):
+    name = 'RESERVED for eDP'
+    start = 0x2010
+    end = 0x2012
+
+class DPRXEventStatusReservedMultiByteReserved40C(PrintReserved):
+    name = 'RESERVED for eDP'
+    start = 0x2013
+    end = 0x21ff
+
 
 class ExtendedReceivrCapVer(RangeParser):
     name = 'DP1.3_DPCD_REV'
@@ -1167,6 +1303,17 @@ class ExtendedReceivrCapMaxDownSpread(RangeParser):
         self.add_result(
             'NO_AUX_TRANSACTION_LINK_TRAINING', 0, 6, 6, lambda x: 'Requires AUX transactions to synchronize to a DPTX' if x else 'Does not require AUX transactions when the link configuration is already known')
 
+class ExtendedReceiverCapField(RangeParser):
+    name = "NORP & DP_PWR_VOLTAGE_CAP"
+    start = 0x2204
+    end = 0x2204
+
+    def parse(self):
+        self.add_result('Number of Receiver Ports', 0, 0, printfn=lambda x: "{}".format("Two or more receiver ports" if x else "One receiver port"))
+        self.add_result('RESERVED', 0, 1, 4)
+        self.add_result('5V_DP_PWR_CAP', 0 , 5, printfn=lambda x : "{} capable of producing +4.9 to +5.5V".format(" " if x else "Not"))
+        self.add_result('12V_DP_PWR_CAP', 0 , 6, printfn=lambda x : "{} capable of producing +12V ±10%".format(" " if x else "Not"))
+        self.add_result('18V_DP_PWR_CAP', 0 , 7, printfn=lambda x : "{} capable of producing +18V ±10%".format(" " if x else "Not"))
 
 class RangeCECTunnelingCap(RangeParser):
     name = 'CEC_TUNNELING_CAPABILITY'
