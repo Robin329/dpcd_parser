@@ -115,7 +115,7 @@ def main():
             print("Error, args len is " + str(len(data)))
             print("./" + arg_parser.prog + " -p 0x3000  0x1")
             return
-        print(data)
+        # print(data)
         p.parse_hdcp(data)
         p.print()
 

@@ -1,13 +1,18 @@
 import collections
 from enum import Enum
 
+
 class DebugLevel(Enum):
     ERROR = 0
     WARN = 1
     INFO = 2
     DEBUG = 3
 
-def dpcd_print( debug_level = DebugLevel.INFO, msg = "", verbose = False):
+
+DPCD_PRINT_LOG_LEVEL = DebugLevel.INFO
+
+
+def dpcd_print(debug_level=DebugLevel.INFO, msg="", verbose=False):
     """
     print debug message, Print only if the given
     level is less than or equal to the specified debug level
@@ -24,7 +29,9 @@ def dpcd_print( debug_level = DebugLevel.INFO, msg = "", verbose = False):
         DebugLevel.DEBUG: "DEBUG:"
     }
     debug_string = debug_levels.get(debug_level, "INFO :")
-    print(f"{debug_string} {msg}")
+    if debug_level.value <= DPCD_PRINT_LOG_LEVEL.value:
+        print(f"{debug_string} {msg}")
+
 
 class ParserBase(object):
     pass
@@ -49,7 +56,8 @@ class MultiByteParser(ParserBase):
     @classmethod
     def can_parse(cls, start):
         # TODO: add partial parsing support
-        dpcd_print(DebugLevel.INFO, "start:" + hex(start) + " cls.start:" + hex(cls.start) + " cls.end:" + hex(cls.end))
+        dpcd_print(DebugLevel.DEBUG, "start:" + hex(start) +
+                   " cls.start:" + hex(cls.start) + " cls.end:" + hex(cls.end))
         if start >= cls.start and start <= cls.end:
             return True
         return False
@@ -86,14 +94,14 @@ class RangeParser(ParserBase):
     end = None
 
     def __init__(self, bytes, value_offset):
-        dpcd_print(DebugLevel.DEBUG,"value_offset: {}".format(value_offset))
+        dpcd_print(DebugLevel.DEBUG, "value_offset: {}".format(value_offset))
         self.value = bytes[value_offset:value_offset + self.num_bytes()]
-        dpcd_print(DebugLevel.DEBUG,"self.value: {}".format(self.value))
-        dpcd_print(DebugLevel.DEBUG,"bytes: {}".format(bytes))
+        dpcd_print(DebugLevel.DEBUG, "self.value: {}".format(self.value))
+        dpcd_print(DebugLevel.DEBUG, "bytes: {}".format(bytes))
         byte_num = len(bytes) - 1
-        dpcd_print(DebugLevel.DEBUG,"byte_num: {}".format(byte_num))
+        dpcd_print(DebugLevel.DEBUG, "byte_num: {}".format(byte_num))
         self.value = bytes[1:]
-        dpcd_print(DebugLevel.DEBUG,"self.value: {}".format(self.value))
+        dpcd_print(DebugLevel.DEBUG, "self.value: {}".format(self.value))
         self.parse_result = []
 
     @classmethod
@@ -130,7 +138,7 @@ class RangeParser(ParserBase):
                                           type(self).name,
                                           ', '.join(hex(x) for x in self.value)))
         for v in self.parse_result:
-            print('    [{:<3}{}:{}] {:40}{}'.format(
+            print('  [{:<3}{}:{}]  {:41}{}'.format(
                 v.value,
                 v.start_bit,
                 v.end_bit,
@@ -818,7 +826,7 @@ class LinkCfgAudioDelay(RangeParser):
 
 
 # --------------------------------------
-# 0x200 - 0x2ff
+# DPCD Address 0x200 - 0x2ff
 # --------------------------------------
 class RangeSinkCount(RangeSinkCountParser):
     name = 'SINK_COUNT'
@@ -926,23 +934,89 @@ class MultiByteDeviceId(MultiByteParser):
     def parse(self):
         self.add_result(lambda x: '"{}"'.format(bytes(x).decode('utf-8')))
 
+
 class RangeHardwareRevision(RangeParser):
     def parse(self):
         self.add_result('Minor Revision', 0, 0, 3)
         self.add_result('Major Revision', 0, 4, 7)
 
+
 class RangeFirmwareMinorRevision(RangeParser):
     def parse(self):
         self.add_result('Revision', 0, 0, 7)
 
+class LinkSinkDevStatusFieldAdjustRequestLane01(RangeParser):
+    name = "ADJUST_REQUEST_LANE0_1"
+    start = 0x206
+    end = 0x206
+
+    voltage_swing_map = {
+        0b00: "0",
+        0b01: "1",
+        0b10: "2",
+        0b11: "3",
+    }
+
+    def voltage_swing_lvl(self, val):
+        return "Level {}".format(self.voltage_swing_map.get(val, "Error"))
+    def parse(self):
+        self.add_result("VOLTAGE_SWING_LANE0", 0, 0, 1, self.voltage_swing_lvl)
+        self.add_result("PRE-EMPHASIS_LANE0", 0, 2, 3, self.voltage_swing_lvl)
+        self.add_result("VOLTAGE_SWING_LANE1", 0, 4, 5, self.voltage_swing_lvl)
+        self.add_result("PRE-EMPHASIS_LANE1", 0, 6, 7, self.voltage_swing_lvl)
+
+class LinkSinkDevStatusFieldAdjustRequestLane23(RangeParser):
+    name = "ADJUST_REQUEST_LANE2_3"
+    start = 0x207
+    end = 0x207
+
+    def parse(self):
+        self.add_result('ADJUST_REQUEST_LANE2_3', 0, 7)
+class LinkSinkDevStatusFieldTrainingScoreLane0(RangeParser):
+    name = "TRAINING_SCORE_LANE0"
+    start = 0x208
+    end = 0x208
+
+    def parse(self):
+        self.add_result('TRAINING_SCORE_LANE0', 0, 7)
+class LinkSinkDevStatusFieldTrainingScoreLane1(RangeParser):
+    name = "TRAINING_SCORE_LANE1"
+    start = 0x209
+    end = 0x209
+
+    def parse(self):
+        self.add_result('ADJUST_REQUEST_LANE2_3', 0, 7)
+class LinkSinkDevStatusFieldTrainingScoreLane2(RangeParser):
+    name = "TRAINING_SCORE_LANE2"
+    start = 0x20A
+    end = 0x20A
+
+    def parse(self):
+        self.add_result('TRAINING_SCORE_LANE2', 0, 7)
+class LinkSinkDevStatusFieldTrainingScoreLane3(RangeParser):
+    name = "TRAINING_SCORE_LANE3"
+    start = 0x20B
+    end = 0x20B
+
+    def parse(self):
+        self.add_result('TRAINING_SCORE_LANE3', 0, 7)
+
+class LinkSinkDevStatusFieldReserved20C_20E(PrintReserved):
+    name = "Reserved"
+    start = 0x20C
+    end = 0x20E
+
 # --------------------------------------
-# 0x300 - 0x3ff
+# DPCD Address 0x300 - 0x3ff
 # --------------------------------------
 #  "0x300 0x00000"
+
+
 class SourceDevspecFieldMultiByteSinkIEEEOUI(MultiByteIEEEOUI):
     name = 'Source IEEE_OUI'
     start = 0x300
     end = 0x302
+
 
 class SourceDevspecFieldMultiByteSinkDeviceId(MultiByteDeviceId):
     name = 'Source Device Identification String'
@@ -954,6 +1028,7 @@ class SourceFieldRangeSinkHardwareRevision(RangeHardwareRevision):
     name = 'Source Hardware Revision'
     start = 0x309
     end = 0x309
+
 
 class SourceDevspecFieldRangeSinkFirmwareMajorRevision(RangeFirmwareMajorRevision):
     name = 'Source Firmware Major Revision'
@@ -982,32 +1057,37 @@ class SourceDevspecFieldMultiByteReserved40C(MultiByteParser):
 
 
 # --------------------------------------
-# 0x400 - 0x4ff
+# DPCD Address 0x400 - 0x4ff
 # --------------------------------------
 class MultiByteSinkIEEEOUI(MultiByteIEEEOUI):
     name = 'Sink IEEE_OUI'
     start = 0x400
     end = 0x402
 
+
 class MultiByteSinkDeviceId(MultiByteDeviceId):
     name = 'Sink Device Identification String'
     start = 0x403
     end = 0x408
+
 
 class RangeSinkHardwareRevision(RangeHardwareRevision):
     name = 'Sink Hardware Revision'
     start = 0x409
     end = 0x409
 
+
 class RangeSinkFirmwareMajorRevision(RangeFirmwareMajorRevision):
     name = 'Sink Firmware Major Revision'
     start = 0x40A
     end = 0x40A
 
+
 class RangeSinkFirmwareMinorRevision(RangeFirmwareMinorRevision):
     name = 'Sink Firmware Minor Revision'
     start = 0x40B
     end = 0x40B
+
 
 class MultiByteReserved40C(MultiByteParser):
     name = 'RESERVED'
@@ -1018,8 +1098,10 @@ class MultiByteReserved40C(MultiByteParser):
         self.add_result()
 
 # --------------------------------------
-# 0x500 - 0x5ff
+# DPCD Address 0x500 - 0x5ff
 # --------------------------------------
+
+
 class MultiByteBranchIEEEOUI(MultiByteIEEEOUI):
     name = 'Branch IEEE_OUI'
     start = 0x500
@@ -1049,6 +1131,7 @@ class RangeBranchFirmwareMinorRevision(RangeFirmwareMinorRevision):
     start = 0x50B
     end = 0x50B
 
+
 class BranchMultiByteReserved40C(MultiByteParser):
     name = 'RESERVED'
     start = 0x50C
@@ -1057,8 +1140,10 @@ class BranchMultiByteReserved40C(MultiByteParser):
     def parse(self):
         self.add_result()
 # --------------------------------------
-# 0x600 - 0x6ff
+# DPCD Address 0x600 - 0x6ff
 # --------------------------------------
+
+
 class SinkDevPowerCtrlField(RangeParser):
     name = "SET_POWER & SET_DP_PWR_VOLTAGE"
     start = 0x600
@@ -1077,9 +1162,13 @@ class SinkDevPowerCtrlField(RangeParser):
     def parse(self):
         self.add_result('SET_POWER_STATE', 0, 0, 2, self.power_state)
         self.add_result('RESERVED', 0, 3, 4)
-        self.add_result('SET_DN_DEVICE_DP_PWR_5V', 0, 5, 5, lambda x: "DP_PWR 5V" if x else "None")
-        self.add_result('SET_DN_DEVICE_DP_PWR_12V', 0, 6, 6, lambda x: "DP_PWR 12V" if x else "None")
-        self.add_result('SET_DN_DEVICE_DP_PWR_18V', 0, 7, printfn=lambda x: '{}'.format('DP_PWR 18V' if x else 'None'))
+        self.add_result('SET_DN_DEVICE_DP_PWR_5V', 0, 5, 5,
+                        lambda x: "DP_PWR 5V" if x else "None")
+        self.add_result('SET_DN_DEVICE_DP_PWR_12V', 0, 6, 6,
+                        lambda x: "DP_PWR 12V" if x else "None")
+        self.add_result('SET_DN_DEVICE_DP_PWR_18V', 0, 7, printfn=lambda x: '{}'.format(
+            'DP_PWR 18V' if x else 'None'))
+
 
 class BranchMultiByteReserved40C(MultiByteParser):
     name = 'RESERVED'
@@ -1090,15 +1179,17 @@ class BranchMultiByteReserved40C(MultiByteParser):
         self.add_result()
 
 # --------------------------------------
-# 0x700 - 0x7ff
+# DPCD Address 0x700 - 0x7ff
 # --------------------------------------
+
+
 class BranchMultiByteReserved40C(PrintReserved):
     name = 'RESERVED for EDP'
     start = 0x701
     end = 0x7FF
 
 # --------------------------------------
-# 0x1000 - 0x17ff
+# DPCD Address 0x1000 - 0x17ff
 # --------------------------------------
 class MultiByteDownRequest(MultiByteParser):
     name = 'DOWN_REQ'
@@ -1136,12 +1227,15 @@ class MultiByteUpRequest(MultiByteParser):
         self.add_result()
 
 # --------------------------------------
-# 0x2000 - 0x21ff
+# DPCD Address 0x2000 - 0x21ff
 # --------------------------------------
+
+
 class DPRXEventMultiByteReserved40C(PrintReserved):
     name = 'RESERVED'
     start = 0x2000
     end = 0x2001
+
 
 class RangeSinkCountESI(RangeSinkCountParser):
     name = 'SINK_COUNT_ESI'
@@ -1226,10 +1320,12 @@ class RangeSinkStatusESI(RangeSinkStatusParser):
     start = 0x200F
     end = 0x200F
 
+
 class DPRXEventStatusMultiByteReserved40C(PrintReserved):
     name = 'RESERVED for eDP'
     start = 0x2010
     end = 0x2012
+
 
 class DPRXEventStatusReservedMultiByteReserved40C(PrintReserved):
     name = 'RESERVED for eDP'
@@ -1280,6 +1376,8 @@ class ExtendedReceivrCapMaxLaneCount(RangeParser):
             return 'Two lanes (Lanes 0 and 1 only)'
         elif val == 0x4:
             return 'Four lanes (Lanes 0, 1, 2, and 3)'
+        else:
+            return "Error"
 
     def parse(self):
         self.add_result('Maximum number of lanes = ', 0, 0, 4, self.lane_num)
@@ -1303,30 +1401,526 @@ class ExtendedReceivrCapMaxDownSpread(RangeParser):
         self.add_result(
             'NO_AUX_TRANSACTION_LINK_TRAINING', 0, 6, 6, lambda x: 'Requires AUX transactions to synchronize to a DPTX' if x else 'Does not require AUX transactions when the link configuration is already known')
 
+
 class ExtendedReceiverCapField(RangeParser):
     name = "NORP & DP_PWR_VOLTAGE_CAP"
     start = 0x2204
     end = 0x2204
 
     def parse(self):
-        self.add_result('Number of Receiver Ports', 0, 0, printfn=lambda x: "{}".format("Two or more receiver ports" if x else "One receiver port"))
+        self.add_result('Number of Receiver Ports', 0, 0, printfn=lambda x: "{}".format(
+            "Two or more receiver ports" if x else "One receiver port"))
         self.add_result('RESERVED', 0, 1, 4)
-        self.add_result('5V_DP_PWR_CAP', 0 , 5, printfn=lambda x : "{} capable of producing +4.9 to +5.5V".format(" " if x else "Not"))
-        self.add_result('12V_DP_PWR_CAP', 0 , 6, printfn=lambda x : "{} capable of producing +12V ±10%".format(" " if x else "Not"))
-        self.add_result('18V_DP_PWR_CAP', 0 , 7, printfn=lambda x : "{} capable of producing +18V ±10%".format(" " if x else "Not"))
+        self.add_result('5V_DP_PWR_CAP', 0, 5,
+                        printfn=lambda x: "{} capable of producing +4.9 to +5.5V".format(" " if x else "Not"))
+        self.add_result('12V_DP_PWR_CAP', 0, 6,
+                        printfn=lambda x: "{} capable of producing +12V ±10%".format(" " if x else "Not"))
+        self.add_result('18V_DP_PWR_CAP', 0, 7,
+                        printfn=lambda x: "{} capable of producing +18V ±10%".format(" " if x else "Not"))
 
-class RangeCECTunnelingCap(RangeParser):
-    name = 'CEC_TUNNELING_CAPABILITY'
+
+class ExtendedReceiveCapFieldPortPresent(RangeParser):
+    name = "DOWN_STREAM_PORT_PRESENT"
+    start = 0x2205
+    end = 0x2205
+
+    def dfp_type(self, val):
+        if val == 0b00:
+            return "DisplayPort"
+        elif val == 0b01:
+            return "Analog VGA or analog video over DVI-I"
+        elif val == 0b10:
+            return "DVI, HDMI, or DP++"
+        elif val == 0b11:
+            return "Others"
+
+    def parse(self):
+        self.add_result("DFP_PRESENT", 0, 0, printfn=lambda x: "{} Branch device and DFP(s)".format(
+            "IS" if x else "Not"))
+        self.add_result("DFP_TYPE", 0, 1, 2, self.dfp_type)
+        self.add_result("FORMAT_CONVERSION", 0, 3, printfn=lambda x: "This {} a format conversion block".format(
+            "DFP has" if x else "Branch device does not have"))
+        self.add_result("DETAILED_CAP_INFO_AVAILABLE", 0, 4,
+                        printfn=lambda x: "DFP capability field is {} byte per port".format("4" if x else "1"))
+        self.add_result("Reserved", 0, 5, 7)
+
+
+class ExtendedReceiveCapFieldChannelCoding(RangeParser):
+    name = "MAIN_LINK_CHANNEL_CODING"
+    start = 0x2206
+    end = 0x2206
+
+    def parse(self):
+        self.add_result("ANSI 8b/10b", 0, 0, printfn=lambda x: "DisplayPort receiver {} the Main-Link channel coding specification".format(
+            "Support" if x else "Not support"))
+        self.add_result("Reserved", 0, 1, 7)
+
+
+class ExtendedReceiveCapFieldPortCount(RangeParser):
+    name = "DOWN_STREAM_PORT_COUNT"
+    start = 0x2207
+    end = 0x2207
+
+    def dfp_count(self, val):
+        if val == 0b00:
+            return "No DFPs"
+        else:
+            return "{} DFPs".format(val)
+
+    def parse(self):
+        self.add_result("DFP_COUNT", 0, 0, 3, self.dfp_count)
+        self.add_result("RESERVED", 0, 4, 5)
+        self.add_result("MSA_TIMING_PAR_IGNORED", 0, 6, printfn=lambda x: "{}".format(
+            "Sink device requires the MSA timing parameters" if x else "Sink device is capable of rendering the incoming video stream"))
+        self.add_result("OUI Support", 0, 7, printfn=lambda x: "OUI is {} supported".format(
+            "" if x else "Not"))
+
+
+class ExtendedReceiveCapFieldPortxCapx(RangeParser):
+    def parse(self):
+        self.add_result("RESERVED", 0, 0)
+        self.add_result("LOCAL_EDID_PRESENT", 0, 1, printfn=lambda x: "This receiver port {} a local EDID".format(
+            "has" if x else "does not have"))
+        self.add_result("ASSOCIATED_TO_PRECEDING_PORT", 0, 2,
+                        printfn=lambda x: "This port is used for the  {} isochronous stream".format("secondary" if x else "main"))
+        self.add_result("RESERVED", 0, 3, 7)
+
+
+class ExtendedReceiveCapFieldPort0Cap0(ExtendedReceiveCapFieldPortxCapx):
+    name = "RECEIVE_PORT0_CAP_0"
+    start = 0x2208
+    end = 0x2208
+
+
+class ExtendedReceiveCapFieldPort0Cap1(PrintReserved):
+    name = "RECEIVE_PORT0_CAP_1"
+    start = 0x2209
+    end = 0x2209
+
+
+class ExtendedReceiveCapFieldPort1Cap0(ExtendedReceiveCapFieldPortxCapx):
+    name = "RECEIVE_PORT1_CAP_0"
+    start = 0x220A
+    end = 0x220A
+
+
+class ExtendedReceiveCapFieldPort1Cap1(PrintReserved):
+    name = "RECEIVE_PORT1_CAP_1"
+    start = 0x220B
+    end = 0x220B
+
+
+class ExtendedReceiveCapFieldI2CSpeedCtrlCapBitMap(RangeParser):
+    name = "I2C Speed Control Capabilities Bit Map"
+    start = 0x220C
+    end = 0x220C
+
+    def i2c_speed(self, val):
+        if val == 0b00000001:
+            return "1Kbps."
+        elif val == 0b00000010:
+            return "5Kbps."
+        elif val == 0b00000100:
+            return "10Kbps."
+        elif val == 0b00001000:
+            return "100Kbps."
+        elif val == 0b00010000:
+            return "400Kbps."
+        elif val == 0b00100000:
+            return "1Mbps."
+        elif val == 0b01000000:
+            return "Reserved."
+        elif val == 0b10000000:
+            return "Reserved."
+
+    def parse(self):
+        self.add_result("I2C Speed", 0, 0, 7, self.i2c_speed)
+
+
+class ExtendedReceiveCapFieldeDPConfiCap(RangeParser):
+    name = "EDP_CONFIGURATION_CAP"
+    start = 0x220D
+    end = 0x220D
+
+    def parse(self):
+        self.add_result("ALTERNATE_SCRAMBLER_RESET_CAPABLE", 0, 0,
+                        printfn=lambda x: "{} can use the eDP alternate scrambler".format(" " if x else "Not"))
+        self.add_result("RESERVED", 0, 1, 7)
+
+
+class ExtendedReceiveCapFieldTrainingAuxRDInterval(RangeParser):
+    name = "TRAINING_AUX_RD_INTERVAL"
+    start = 0x220E
+    end = 0x220E
+
+    interval_mapping = {
+        0x00: "400us",
+        0x01: "4ms",
+        0x02: "8ms",
+        0x03: "12ms",
+        0x04: "16ms",
+    }
+
+    def aux_interval(self, val):
+        return "00us for the Main-Link Clock Recovery phase; {} for the Main-Link Channel Equalization phase".format(self.interval_mapping.get(val, "400us"))
+
+    def parse(self):
+        self.add_result("TRAINING_AUX_RD_INTERVAL", 0, 0, 6, self.aux_interval)
+        self.add_result("EXTENDED_RECEIVER_CAPABILITY_FIELD_PRESENT", 0,
+                        7, printfn=lambda x: "{} present".format(" " if x else "Not"))
+
+
+class ExtendedReceiveCapFieldAdapterCap(RangeParser):
+    name = "ADAPTOR_CAP"
+    start = 0x220F
+    end = 0x220F
+
+    def parse(self):
+        self.add_result("FORCE_LOAD_SENSE_CAP", 0, 0,
+                        printfn=lambda x: "{} support VGA force load adaptor sense mechanism".format("" if x else "Does not"))
+        self.add_result("ALTERNATE_I2C_PATTERN_CAP", 0, 1,
+                        printfn=lambda x: "{} support alternate i2c patterns".format("" if x else "Does not"))
+        self.add_result("Reserved", 0, 2, 7)
+
+
+class ExtendedReceiveCapFieldEnumerationList(RangeParser):
+    name = "DPRX_FEATURE_ENUMERATION_LIST"
+    start = 0x2210
+    end = 0x2210
+
+    def parse(self):
+        self.add_result(
+            "GTC_CAP", 0, 0, printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("SST_SPLIT_SDP_CAP", 0, 1,
+                        printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("AV_SYNC_CAP", 0, 2, printfn=lambda x: "{} supported".format(
+            "" if x else "Not"))
+        self.add_result("VSC_SDP_EXTENSION_FOR_COLORIMETRY_SUPPORTED", 0,
+                        3, printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("VSC_EXT_VESA_SDP_SUPPORTED", 0, 4,
+                        printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("VSC_EXT_VESA_SDP_CHAINING_SUPPORTED", 0, 5,
+                        printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("VSC_EXT_CEA_SDP_SUPPORTED", 0, 6,
+                        printfn=lambda x: "{} supported".format("" if x else "Not"))
+        self.add_result("VSC_EXT_CEA_SDP_CHAINING_SUPPORTED", 0, 7,
+                        printfn=lambda x: "{} supported".format("" if x else "Not"))
+
+
+class ExtendedReceiveCapFieldSleepWakeTimeoutRequest(RangeParser):
+    name = "EXTENDED_DPRX_SLEEP_WAKE_TIMEOUT_REQUEST"
+    start = 0x2211
+    end = 0x2211
+
+    timeout_mapping = {
+        0x00: "1ms",
+        0x01: "20ms",
+        0x02: "40ms",
+        0x03: "60ms",
+        0x04: "80ms",
+        0x05: "100ms",
+    }
+
+    def wake_timeout(self, val):
+        return self.timeout_mapping.get(val, "Reserved")
+
+    def parse(self):
+        self.add_result("DPRX_SLEEP_WAKE_TIMEOUT_PERIOD",
+                        0, 0, 7, self.wake_timeout)
+
+
+class ExtendedReceiveCapFieldVSCVesaSDPMaxChaining(RangeParser):
+    name = "VSC_EXT_VESA_SDP_MAX_CHAINING"
+    start = 0x2212
+    end = 0x2212
+
+    def parse(self):
+        self.add_result("VSC_EXT_VESA_SDP_MAX_CHAINING_COUNT", 0, 0, 7)
+
+
+class ExtendedReceiveCapFieldVSCCEASDPMaxChaining(RangeParser):
+    name = "VSC_EXT_CEA_SDP_MAX_CHAINING"
+    start = 0x2213
+    end = 0x2213
+
+    def parse(self):
+        self.add_result("VSC_EXT_CEA_SDP_MAX_CHAINING_COUNT", 0, 0, 7)
+
+
+class ExtendedReceiveCapFieldReserved(PrintReserved):
+    name = "RESERVED"
+    start = 0x2214
+    end = 0x22FF
+
+# --------------------------------------
+# DPCD Address 0x3000 - 0x30ff
+# --------------------------------------
+class ProtocolConverterExtensionFieldCECTunelingCap(RangeParser):
+    name = "CEC_TUNNELING_CAPABILITY"
     start = 0x3000
     end = 0x3000
 
     def parse(self):
-        self.add_result('CEC_TUNNELING_CAPABLE', 0, 0)
-        self.add_result('CEC_SNOOPING_CAPABLE', 0, 1)
-        self.add_result('CEC_MULTIPLE_LA_CAPABLE', 0, 2)
+        self.add_result("CEC_TUNNELING_CAPABLE", 0, 0,
+                        printfn=lambda x: "{} Surpport CEC-Tunnelingover-AUX".format("" if x else "Not"))
+        self.add_result("CEC_SNOOPING_CAPABLE", 0, 1,
+                        printfn=lambda x: "{} Surpport passively snooping CEC messages".format("" if x else "Not"))
+        self.add_result("CEC_MULTIPLE_LA_CAPABLE", 0, 2,
+                        printfn=lambda x: "{} Supports  acting as a Follower for multiple CEC Logical Addresses".format("" if x else "Not"))
+        self.add_result("RESERVED", 0, 3, 7)
+
+
+class ProtocolConverterExtensionFieldTunningCtrl(RangeParser):
+    name = "CEC_TUNNELING_CONTROL"
+    start = 0x3001
+    end = 0x3001
+
+    def parse(self):
+        self.add_result('CEC_TUNNELING_ENABLE', 0, 0,
+                        printfn=lambda x: "Prompts a DP-to-HDMI protocol converter to {} CEC message reception from, and transmission to".format("enable" if x else "disable"))
+        self.add_result("CEC_SNOOPING_ENABLE", 0, 1, 1,
+                        lambda x: "Receive all CEC messages, regardless of the Destination logical address." if x else "Receive all directly addressed CEC messages")
+        self.add_result("RESERVED", 0, 2, 7)
+
+
+class ProtocolConverterExtensionFieldCECRxMsgInfo(RangeParser):
+    name = 'CEC_RX_MESSAGE_INFO'
+    start = 0x3002
+    end = 0x3002
+
+    def parse(self):
+        self.add_result("CEC_RX_MESSAGE_LEN", 0, 0, 3)
+        self.add_result('CEC_RX_MESSAGE_HPD_STATE', 0, 4, 4)
+        self.add_result('CEC_RX_MESSAGE_HPD_LOST', 0, 5, 5)
+        self.add_result('CEC_RX_MESSAGE_ACKED', 0, 6, 6)
+        self.add_result('CEC_RX_MESSAGE_ENDED', 0, 7, 7)
+
+class ProtocolConverterExtensionFieldCECTxMsgInfo(RangeParser):
+    name = 'CEC_TX_MESSAGE_INFO'
+    start = 0x3002
+    end = 0x3002
+
+    def parse(self):
+        self.add_result("CEC_TX_MESSAGE_LEN", 0, 0, 3)
+        self.add_result('CEC_TX_RETRY_COUNT', 0, 4, 6)
+        self.add_result('CEC_TX_MESSAGE_SEND / CEC_TX_MESSAGE_BUFFER_UNAVAILABLE', 0, 7, 7)
+
+class ProtocolConverterExtensionFieldCECTunnelingIRQFlags(RangeParser):
+    name = "CEC_TUNNELING_IRQ_FLAGS"
+    start = 0x3004
+    end = 0x3004
+
+    def parse(self):
+        self.add_result('CEC_RX_MESSAGE_INFO_VALID', 0, 0, 0)
+        self.add_result('CEC_RX_MESSAGE_OVERFLOW', 0, 1, 1)
+        self.add_result('Reserved', 0, 2, 3)
+        self.add_result('CEC_TX_MESSAGE_SENT', 0, 4, 4)
+        self.add_result('CEC_TX_LINE_ERROR', 0, 5, 5)
+        self.add_result('CEC_TX_ADDRESS_NACK_ERROR', 0, 6, 6)
+        self.add_result('CEC_TX_DATA_NACK_ERROR', 0, 7, 7)
+class ProtocolConverterExtensionFieldReserved(PrintReserved):
+    name = "Reserved"
+    start = 0x3005
+    end = 0x300D
+class ProtocolConverterExtensionFieldCECLogicalAddrMask(RangeParser):
+    name = "CEC_LOGICAL_ADDRESS_MASK"
+    start = 0x300E
+    end = 0x300F
+
+    def parse(self):
+        self.add_result('CEC_LOGICAL_ADDRESS_MASK', 1, 0, 6)
+        self.add_result('CEC_LOGICAL_ADDRESS_MASK', 0, 0, 7)
+        self.add_result('CEC_LOGICAL_ADDRESS_MASK', 1, 7, 7)
+class ProtocolConverterExtensionFieldCECRxMsgBuf(RangeParser):
+    name = "CEC_RX_MESSAGE_BUFFER"
+    start = 0x3010
+    end = 0x301F
+
+    def parse(self):
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 0, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 1, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 2, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 3, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 4, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 5, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 6, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 7, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 8, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 9, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 10, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 11, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 12, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 13, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 14, 0, 7)
+        self.add_result('CEC_RX_MESSAGE_BUFFER', 15, 0, 7)
+
+class ProtocolConverterExtensionFieldCECTxMsgBuf(RangeParser):
+    name = "CEC_TX_MESSAGE_BUFFER"
+    start = 0x3020
+    end = 0x302F
+
+    def parse(self):
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 0, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 1, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 2, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 3, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 4, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 5, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 6, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 7, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 8, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 9, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 10, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 11, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 12, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 13, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 14, 0, 7)
+        self.add_result('CEC_TX_MESSAGE_BUFFER', 15, 0, 7)
+class ProtocolConverterExtensionFieldDownStreamLinkErrorReport(RangeParser):
+    name = "DOWNSTREAM_LINK_ERROR_REPORTING_SUPPORTED"
+    start = 0x3030
+    end = 0x3030
+
+    def parse(self):
+        self.add_result('DOWNSTREAM_LINK_ERROR_REPORTING_SUPPORTED', 0, 0, printfn=lambda x:"{} Supported".format("" if x else "Not"))
+        self.add_result('RESERVED', 0, 1, 7)
+class ProtocolConverterExtensionFieldDownstreamHDMIErrorStatusCH0(RangeParser):
+    name = "DOWNSTREAM_HDMI_ERROR_STATUS_CH0"
+    start = 0x3031
+    end = 0x3031
+
+    def parse(self):
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH0', 0, 0, printfn=lambda x:"{} more than 3 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH0', 0, 1, printfn=lambda x:"{} more than 10 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH0', 0, 2, printfn=lambda x:"{} more than 100 errors since the last read".format("" if x else "Not"))
         self.add_result('Reserved', 0, 3, 7)
+class ProtocolConverterExtensionFieldDownstreamHDMIErrorStatusCH1(RangeParser):
+    name = "DOWNSTREAM_HDMI_ERROR_STATUS_CH1"
+    start = 0x3031
+    end = 0x3031
+
+    def parse(self):
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH1', 0, 0, printfn=lambda x:"{} more than 3 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH1', 0, 1, printfn=lambda x:"{} more than 10 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH1', 0, 2, printfn=lambda x:"{} more than 100 errors since the last read".format("" if x else "Not"))
+        self.add_result('Reserved', 0, 3, 7)
+class ProtocolConverterExtensionFieldDownstreamHDMIErrorStatusCH2(RangeParser):
+    name = "DOWNSTREAM_HDMI_ERROR_STATUS_CH2"
+    start = 0x3031
+    end = 0x3031
+
+    def parse(self):
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH2', 0, 0, printfn=lambda x:"{} more than 3 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH2', 0, 1, printfn=lambda x:"{} more than 10 errors since the last read".format("" if x else "Not"))
+        self.add_result('DOWNSTREAM_HDMI_ERROR_STATUS_CH2', 0, 2, printfn=lambda x:"{} more than 100 errors since the last read".format("" if x else "Not"))
+        self.add_result('Reserved', 0, 3, 7)
+class ProtocolConverterExtensionFieldSinkYUVComponentBitDepthSupport(RangeParser):
+    name = 'HDMI_SINK_YCBCR420_COMPONENT_BIT_DEPTH_SUPPORT'
+    start = 0x3034
+    end = 0x3034
+    def parse(self):
+        self.add_result('BIT_DEPTH', 0, 0, printfn=lambda x:'10 bpc is {} supported'.format(""if x else "Not"))
+        self.add_result('BIT_DEPTH', 0, 1, printfn=lambda x:'12 bpc is {} supported'.format(""if x else "Not"))
+        self.add_result('BIT_DEPTH', 0, 2, printfn=lambda x:'16 bpc is {} supported'.format(""if x else "Not"))
+        self.add_result('Reserved', 0, 3, 7)
+class ProtocolConverterExtensionFieldReserved3035_304F(PrintReserved):
+    name = "Reserved"
+    start = 0x3035
+    end = 0x304F
+
+class ProtocolConverterExtensionFieldCtrl0(RangeParser):
+    name = "PROTOCOL_CONVERTER_CONTROL_0"
+    start = 0x3050
+    end = 0x3050
+
+    def parse(self):
+        self.add_result('HDMI_DVI_OUTPUT_CONFIG', 0, 0, printfn=lambda x:"{}".format("HDMI" if x else "DVI"))
+        self.add_result('RESERVED', 0, 1, 7)
+class ProtocolConverterExtensionFieldCtrl1(RangeParser):
+    name = "PROTOCOL_CONVERTER_CONTROL_1"
+    start = 0x3051
+    end = 0x3051
+
+    def parse(self):
+        self.add_result('CONVERSION_TO_YCBCR420_ENABLE', 0, 0, printfn=lambda x:"{}".format("Enable" if x else "Disable"))
+        self.add_result('HDMI_EDID_PROCESSING_DISABLE', 0, 1, printfn=lambda x:"HDMI autonomous EDID processing {}".format("disabled" if x else "enbled"))
+        self.add_result('HDMI_AUTONOMOUS_SCRAMBLING_DISABLE', 0, 2, printfn=lambda x:"HDMI autonomous scrambling is {}".format("disabled"if x else "enabled"))
+        self.add_result('HDMI_FORCE_SCRAMBLING', 0, 3, printfn=lambda x:"HDMI scrambling is {}".format("enabled"if x else "disabled"))
+        self.add_result('RESERVED', 0, 4, 7)
+class ProtocolConverterExtensionFieldCtrl2(RangeParser):
+    name = "PROTOCOL_CONVERTER_CONTROL_2"
+    start = 0x3052
+    end = 0x3052
+
+    def parse(self):
+        self.add_result('CONVERSION_TO_YCBCR422_ENABLE', 0, 0, printfn=lambda x:"{}".format("Enable" if x else "Disable"))
+        self.add_result('RESERVED', 0, 1, 7)
+
+class ProtocolConverterExtensionFieldReserved_3053(PrintReserved):
+    name = "Reserved"
+    start = 0x3053
+    end = 0x3053
+class ProtocolConverterExtensionFieldOutputHtt(RangeParser):
+    name = "OUTPUT_HTOTAL"
+    start = 0x3054
+    end = 0x3055
+
+    def parse(self):
+        self.add_result('OUTPUT_HTOTAL7:0', 0, 0, 7)
+        self.add_result('OUTPUT_HTOTAL15:8', 1, 0, 7)
+class ProtocolConverterExtensionFieldOutputHstart(RangeParser):
+    name = "OUTPUT_HSTART"
+    start = 0x3056
+    end = 0x3057
+
+    def parse(self):
+        self.add_result('OUTPUT_HSTART7:0', 0, 0, 7)
+        self.add_result('OUTPUT_HSTART15:8', 1, 0, 7)
+class ProtocolConverterExtensionFieldOutputHSPHSW(RangeParser):
+    name = "OUTPUT_HSP_HSW"
+    start = 0x3058
+    end = 0x3059
+
+    def parse(self):
+        self.add_result('OUTPUT_HSP_HSW7:0', 0, 0, 7)
+        self.add_result('OUTPUT_HSP_HSW14:8', 1, 0, 6)
+        self.add_result('OUTPUT_HSP', 1, 7, 7, lambda x:"Negative pulse" if x else "Positive pulse(default)")
+
+class ProtocolConverterExtensionFieldReserved_305A_30FF(PrintReserved):
+    name = "Reserved"
+    start = 0x305A
+    end = 0x30FF
+
+# --------------------------------------
+# DPCD Address 0x60000 - 0x61CFF
+# --------------------------------------
+class MultiTouchField(PrintReserved):
+    name = "RESERVED for Multi-touch (for eDP v1.4 or higher)"
+    start = 0x60000
+    end = 0x61CFF
+
+# class HDCP13_22Field(PrintReserved):
+#     name = "RESERVED for HDCP1.3"
+#     start = 0x68000
+#     end = 0x68FFF
+
+# class HDCP13_22Field_22(PrintReserved):
+#     name = "RESERVED for HDCP2.2"
+#     start = 0x69000
+#     end = 0x69FFF
+
+# --------------------------------------
+# DPCD Address 0x61D00 - 0x67FFF
+# --------------------------------------
+class DPCD_RESERVED_61d00_67fff(PrintReserved):
+    name = "RESERVED"
+    start = 0x61D00
+    end = 0x67FFF
 
 
+# --------------------------------------
+# DPCD Address 0x68000 - 0x69FFF
+# --------------------------------------
 class MultiByteKsvParser(MultiByteParser):
     def bit_weight(self, x):
         weight = 0
@@ -1476,8 +2070,346 @@ class RangeCPReserved(RangeParser):
 
     def parse(self):
         self.add_result('Reserved', 0, 0, 7)
+# --------------------------------------
+# DPCD Address 0x6A000 - 0xEFFFF
+# --------------------------------------
+class DPCD_RESERVED_6A000_EFFFF(PrintReserved):
+    name = "RESERVED"
+    start = 0x6A000
+    end = 0xEFFFF
+# --------------------------------------
+# DPCD Address 0xF0000 - 0xFFFFF
+# --------------------------------------
+class LTTunablePHYRepeaterFieldDataStructureRev(RangeParser):
+    name = "LT_TUNABLE_PHY_REPEATER_FIELD_DATA_STRUCTURE_REV"
+    start = 0xF0000
+    end = 0xF0000
+    def parse(self):
+        self.add_result('Minor Revision Number', 0, 0, 3)
+        self.add_result('Major Revision Number', 0, 4, 7)
+class LTTunablePHYRepeaterFieldMaxLinkRate(RangeParser):
+    name = "MAX_LINK_RATE_PHY_REPEATER"
+    start = 0xF0001
+    end = 0xF0001
+
+    link_rate = {
+        0x06: "1.62",
+        0x0a: "2.7",
+        0x14: "5.4",
+        0x1E: "8.1"
+    }
+    def get_rate(self, value):
+        return "{} Gbps/lane".format(self.link_rate.get(value, "Error"))
+    def parse(self):
+        self.add_result('MAX_LINK_RATE', 0, 0, 7, self.get_rate)
+class LTTunablePHYRepeaterFieldPhyRepeaterCnt(RangeParser):
+    name = "PHY_REPEATER_CNT"
+    start = 0xF0002
+    end = 0xF0002
+
+    link_rate = {
+        0x01: "8",
+        0x02: "7",
+        0x04: "6",
+        0x08: "5",
+        0x0F: "4",
+        0x20: "3",
+        0x40: "2",
+        0x80: "1"
+    }
+    def get_repeater_cnt(self, value):
+        return "{} PHY Repeater are present".format(self.link_rate.get(value, "Error"))
+    def parse(self):
+        self.add_result('PHY_REPEATER_CNT', 0, 0, 7, self.get_repeater_cnt)
+
+class LTTunablePHYRepeaterFieldPhyRepeaterMode(RangeParser):
+    name = "PHY_REPEATER_MODE"
+    start = 0xF0003
+    end = 0xF0003
+
+    def repeater_mode(self, value):
+        if value == 0x55:
+            return "Transparent mode (default)"
+        elif value == 0xAA:
+            return "Non-transparent mode"
+        else:
+            return "Error"
+
+    def parse(self):
+        self.add_result('PHY_REPEATER_MODE', 0, 0, 7, self.repeater_mode)
+class LTTunablePHYRepeaterFieldFECCapCapability(RangeParser):
+    name = "Repeater_FEC_CAPABILITY"
+    start = 0xF0004
+    end = 0xF0004
+
+    def parse(self):
+        self.add_result('FEC_CAPABLE', 0, 0, printfn=lambda x:"{} Capable".format("" if x else "Not"))
+        self.add_result('UNCORRECTED_BLOCK_ERROR_COUNT_CAPABLE', 0, 1, printfn=lambda x:"{} Capable".format("" if x else "Not"))
+        self.add_result('CORRECTED_BLOCK_ERROR_COUNT_CAPABLE', 0, 2, printfn=lambda x:"{} Capable".format("" if x else "Not"))
+        self.add_result('BIT_ERROR_COUNT_CAPABLE', 0, 3, printfn=lambda x:"{} Capable".format("" if x else "Not"))
+        self.add_result('RESERVED', 0, 4, 7)
+class LTTunablePHYRepeaterFieldReservedF0005_F000F(PrintReserved):
+    name = "RESERVED for LT-tunable PHY Repeater"
+    start = 0xF0005
+    end = 0xF000F
 
 
+class LTTunablePHYRepeaterFieldTrainingPatternSetPhyRepeater1(RangeParser):
+    name = "TRAINING_PATTERN_SET_PHY_REPEATER1"
+    start = 0xF0010
+    end = 0xF0010
+    def parse(self):
+        self.add_result('TRAINING_PATTERN_SET_PHY_REPEATER1', 0, 7)
+
+class LTTunablePHYRepeaterFieldTrainingLane0SetPhy(RangeParser):
+    name = "TRAINING_LANE0_SET_PHY_REPEATER1"
+    start = 0xF0011
+    end = 0xF0011
+    def parse(self):
+        self.add_result('TRAINING_LANE0_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldTrainingLane1SetPhy(RangeParser):
+    name = "TRAINING_LANE1_SET_PHY_REPEATER1"
+    start = 0xF0012
+    end = 0xF0012
+    def parse(self):
+        self.add_result('TRAINING_LANE1_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldTrainingLane2SetPhy(RangeParser):
+    name = "TRAINING_LANE2_SET_PHY_REPEATER1"
+    start = 0xF0013
+    end = 0xF0013
+    def parse(self):
+        self.add_result('TRAINING_LANE2_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldTrainingLane3SetPhy(RangeParser):
+    name = "TRAINING_LANE3_SET_PHY_REPEATER1"
+    start = 0xF0014
+    end = 0xF0014
+    def parse(self):
+        self.add_result('TRAINING_LANE3_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLinkQualLane0SetPhyRepeater1(RangeParser):
+    name = "LINK_QUAL_LANE0_SET_PHY_REPEATER1"
+    start = 0xF0015
+    end = 0xF0015
+
+    def parse(self):
+        self.add_result('LINK_QUAL_LANE0_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLinkQualLane1SetPhyRepeater1(RangeParser):
+    name = "LINK_QUAL_LANE1_SET_PHY_REPEATER1"
+    start = 0xF0016
+    end = 0xF0016
+
+    def parse(self):
+        self.add_result('LINK_QUAL_LANE1_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLinkQualLane2SetPhyRepeater1(RangeParser):
+    name = "LINK_QUAL_LANE2_SET_PHY_REPEATER1"
+    start = 0xF0017
+    end = 0xF0017
+
+    def parse(self):
+        self.add_result('LINK_QUAL_LANE2_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLinkQualLane3SetPhyRepeater1(RangeParser):
+    name = "LINK_QUAL_LANE3_SET_PHY_REPEATER1"
+    start = 0xF0018
+    end = 0xF0018
+
+    def parse(self):
+        self.add_result('LINK_QUAL_LANE3_SET_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldReservedF0019_F002F(PrintReserved):
+    name = "Reserved"
+    start = 0xF0019
+    end = 0xF002F
+
+class LTTunablePHYRepeaterFieldLane01StatusPhyRepeater1(RangeParser):
+    name = "LANE0_1_STATUS_PHY_REPEATER1"
+    start = 0xF0030
+    end = 0xF0030
+
+    def parse(self):
+        self.add_result('LANE0_1_STATUS_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLane23StatusPhyRepeater1(RangeParser):
+    name = "LANE2_3_STATUS_PHY_REPEATER1"
+    start = 0xF0031
+    end = 0xF0031
+
+    def parse(self):
+        self.add_result('LANE2_3_STATUS_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldLaneAlignStatusUpdated(RangeParser):
+    name = "LANE_ALIGN_STATUS_UPDATED_PHY_REPEATER1"
+    start = 0xF0032
+    end = 0xF0032
+
+    def parse(self):
+        self.add_result('LANE_ALIGN_STATUS_UPDATED_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldAdjustRequestLane01(RangeParser):
+    name = "ADJUST_REQUEST_LANE0_1_PHY_REPEATER1"
+    start = 0xF0033
+    end = 0xF0033
+
+    def parse(self):
+        self.add_result('ADJUST_REQUEST_LANE0_1_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldAdjustRequestLane23(RangeParser):
+    name = "ADJUST_REQUEST_LANE2_3_PHY_REPEATER1"
+    start = 0xF0034
+    end = 0xF0034
+
+    def parse(self):
+        self.add_result('ADJUST_REQUEST_LANE2_3_PHY_REPEATER1', 0, 7)
+class LTTunablePHYRepeaterFieldSymbolErrorCntLane0(RangeParser):
+    name = "SYMBOL_ERROR_COUNT_LANE0_PHY_REPEATER1"
+    start = 0xF0035
+    end = 0xF0036
+
+    def parse(self):
+        self.add_result('SYMBOL_ERROR_COUNT_LANE0_PHY_REPEATER1', 0, 7)
+        self.add_result('SYMBOL_ERROR_COUNT_LANE0_PHY_REPEATER1', 1, 7)
+class LTTunablePHYRepeaterFieldSymbolErrorCntLane1(RangeParser):
+    name = "SYMBOL_ERROR_COUNT_LANE1_PHY_REPEATER1"
+    start = 0xF0037
+    end = 0xF0038
+
+    def parse(self):
+        self.add_result('SYMBOL_ERROR_COUNT_LANE1_PHY_REPEATER1', 0, 7)
+        self.add_result('SYMBOL_ERROR_COUNT_LANE1_PHY_REPEATER1', 1, 7)
+class LTTunablePHYRepeaterFieldSymbolErrorCntLane2(RangeParser):
+    name = "SYMBOL_ERROR_COUNT_LANE2_PHY_REPEATER1"
+    start = 0xF0039
+    end = 0xF003A
+
+    def parse(self):
+        self.add_result('SYMBOL_ERROR_COUNT_LANE2_PHY_REPEATER1', 0, 7)
+        self.add_result('SYMBOL_ERROR_COUNT_LANE2_PHY_REPEATER1', 1, 7)
+class LTTunablePHYRepeaterFieldSymbolErrorCntLane3(RangeParser):
+    name = "SYMBOL_ERROR_COUNT_LANE3_PHY_REPEATER1"
+    start = 0xF003B
+    end = 0xF003C
+
+    def parse(self):
+        self.add_result('SYMBOL_ERROR_COUNT_LANE3_PHY_REPEATER1', 0, 7)
+        self.add_result('SYMBOL_ERROR_COUNT_LANE3_PHY_REPEATER1', 1, 7)
+class LTTunablePHYRepeaterFieldIEEEOUI(RangeParser):
+    name = 'IEEE_OUI'
+    start = 0xF003D
+    end = 0xF003F
+
+    def parse(self):
+        self.add_result('First two hex digits', 0, 0, 7)
+        self.add_result('Second two hex digits', 1, 0, 7)
+        self.add_result('Third two hex digits', 2, 0, 7)
+
+
+class LTTunablePHYRepeaterFieldLTtunnablePhyRepeaterDevIdStr(RangeParser):
+    name = "LT-tunable PHY Repeater Device Identification String"
+    start = 0xF0040
+    end = 0xF0045
+
+    def parse(self):
+        def decode_bytes(x):
+            try:
+                decoded_str = chr(x)
+                print("decoded_str:"+decoded_str+" x:"+chr(x))
+                return '"{}"'.format(decoded_str)
+            except UnicodeDecodeError as e:
+                return 'Decoding Error: {}'.format(e)
+
+        self.add_result(' ', 0, 0, 7, decode_bytes)
+        self.add_result(' ', 1, 0, 7, decode_bytes)
+        self.add_result(' ', 2, 0, 7, decode_bytes)
+        self.add_result(' ', 3, 0, 7, decode_bytes)
+        self.add_result(' ', 4, 0, 7, decode_bytes)
+        self.add_result(' ', 5, 0, 7, decode_bytes)
+
+class LTTunablePHYRepeaterFieldHardwareRev(RangeParser):
+    name = "Hardware Revision"
+    start = 0xF0046
+    end = 0xF0048
+
+    def parse(self):
+        self.add_result("Hardware Revision", 0, 0, 7)
+        self.add_result("Firmware/Software Major Revision", 1, 0, 7)
+        self.add_result("Firmware/Software Minor Revision", 2, 0, 7)
+
+class LTTunablePhyRepeaterField(RangeParser):
+    name = "FEC_ERROR_COUNT_PHY_REPEATER1"
+    start = 0xF0291
+    end = 0xF092
+
+    def parse(self):
+        self.add_result('FEC_ERROR_COUNT_PHY_REPEATER1_7:0', 0, 0, 7)
+        self.add_result('FEC_ERROR_COUNT_PHY_REPEATER1_14:8', 1, 0, 6)
+        self.add_result('FEC_ERROR_COUNT_VALID', 1, 7, 7, lambda x : "{} Valid".format("" if x else "Not"))
+
+class LTTunablePHYRepeaterFieldReservedF0292_F0297(PrintReserved):
+    name = "RESERVED"
+    start = 0xF0293
+    end = 0xF0297
+
+class FECPrintConfig(RangeParser):
+    def parse(self):
+        self.add_result(' ', 0, 0, 7)
+        self.add_result(' ', 1, 0, 7)
+        self.add_result(' ', 2, 0, 7)
+        self.add_result(' ', 3, 0, 7)
+        self.add_result(' ', 4, 0, 7)
+        self.add_result(' ', 5, 0, 7)
+        self.add_result(' ', 6, 0, 7)
+        self.add_result(' ', 7, 0, 7)
+class LTTunablePHYRepeaterFieldFecPhyRepeater2ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER2 CONFIGURATION AND STATUS FIELD"
+    start = 0xF0298
+    end = 0xF029F
+
+class LTTunablePHYRepeaterFieldFecPhyRepeater3ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER3 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02A0
+    end = 0xF02A7
+
+class LTTunablePHYRepeaterFieldFecPhyRepeater4ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER4 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02A8
+    end = 0xF02AF
+class LTTunablePHYRepeaterFieldFecPhyRepeater5ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER4 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02B0
+    end = 0xF02B7
+class LTTunablePHYRepeaterFieldFecPhyRepeater6ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER4 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02B8
+    end = 0xF02BF
+class LTTunablePHYRepeaterFieldFecPhyRepeater7ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER4 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02C0
+    end = 0xF02C7
+class LTTunablePHYRepeaterFieldFecPhyRepeater8ConfigAndStatus(FECPrintConfig):
+    name = "FEC_PHY_REPEATER4 CONFIGURATION AND STATUS FIELD"
+    start = 0xF02C8
+    end = 0xF02CF
+class LTTunablePHYRepeaterFieldReservedF02D0_F02FF(PrintReserved):
+    name = "RESERVED"
+    start = 0xF02D0
+    end = 0xF02FF
+
+# class LTTunablePHYRepeaterFeld
+
+# --------------------------------------
+# DPCD Address 0xFFF00 - 0xFFFFF
+# --------------------------------------
+
+class MyDPSpecReserved(PrintReserved):
+    name = "RESERVED"
+    start = 0xFFF00
+    end = 0xFFF00
+
+class MyDPSpec(RangeParser):
+    name = "MyDP_POWR_CAP"
+    start = 0xFFF01
+    end = 0xFFF01
+
+    def parse(self):
+        self.add_result('MyDP_POWR_CAP', 0, 7)
+
+class DPCD_RESERVED_FFF02_FFFFF(PrintReserved):
+    name = "RESERVED"
+    start = 0xFFF02
+    end = 0xFFFFF
 def print_dpcd_address_mapping():
     addr_mapping = """
                 Table 2-154: DPCD Field Address Mapping
