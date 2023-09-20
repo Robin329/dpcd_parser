@@ -149,6 +149,11 @@ class RangeParser(ParserBase):
         raise NotImplementedError()
 
 
+
+class PrintReserved(RangeParser):
+    def parse(self):
+        self.add_result('Reserved', 0, 0, 7)
+
 class RangeDPCDRev(RangeParser):
     name = "DPCD_REV"
     start = 0
@@ -478,6 +483,434 @@ class RangeDetailedCapInfo(RangeParser):
             self.add_result('Reserved', 3, 0, 7)
 
 
+class ReceiverCapFieldNumOfAudioEp(RangeParser):
+    name = 'NUMBER_OF_AUDIO_ENDPOINTS'
+    start = 0x22
+    end = 0x22
+
+    def parse(self):
+        self.add_result('NUMBER_OF_AUDIO_ENDPOINTS', 0, 0, 7)
+
+class ReceiverCapFieldAVSyncDataBlockAvGranularity(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK AV_GRANULARITY'
+    start = 0x23
+    end = 0x23
+
+    factor_map = {
+        0b0000: "3ms",
+        0b0001: "2ms(default)",
+        0b0010: "1ms",
+        0b0011: "500us",
+        0b0100: "200us",
+        0b0101: "100us",
+        0b0110: "10us",
+        0b0111: "1us",
+    }
+
+    vg_factor_map = {
+        0b0000: "3ms",
+        0b0001: "2ms(default)",
+        0b0010: "1ms",
+        0b0011: "500us",
+        0b0100: "200us",
+        0b0101: "100us",
+    }
+
+    def ag_factor(self, val):
+        return "{}".format(self.factor_map.get(val, "Reserved"))
+
+    def vg_factor(self, val):
+        return "{}".format(self.vg_factor_map.get(val, "Reserved"))
+    def parse(self):
+        self.add_result("AG_FACTOR", 0, 0, 3, self.ag_factor)
+        self.add_result('VG_FACTOR', 0, 4, 7, self.vg_factor)
+class ReceiverCapFieldAVSyncDataBlock(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x24
+    end = 0x24
+
+    def parse(self):
+        self.add_result('AUD_DEC_LAT[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlock15_8(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x25
+    end = 0x25
+
+    def parse(self):
+        self.add_result('AUD_DEC_LAT[15:8]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockAudppLat(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x26
+    end = 0x26
+    def parse(self):
+        self.add_result('AUD_PP_LAT[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockAudppLat15_8(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x27
+    end = 0x27
+    def parse(self):
+        self.add_result('AUD_PP_LAT[15:8]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockVidInterLat(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x28
+    end = 0x28
+    def parse(self):
+        self.add_result('VID_INTER_LAT[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockVidProgLat(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x29
+    end = 0x29
+    def parse(self):
+        self.add_result('VID_PROG_LAT[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockVidRepLat(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x2A
+    end = 0x2A
+    def parse(self):
+        self.add_result('REP_LAT[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockAudDelIns(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x2B
+    end = 0x2B
+    def parse(self):
+        self.add_result('AUD_DEL_INS[7:0]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockAudDelIns15_8(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x2C
+    end = 0x2C
+    def parse(self):
+        self.add_result('AUD_DEL_INS[15:8]', 0, 0, 7)
+class ReceiverCapFieldAvSyncDataBlockAudDelIns23_16(RangeParser):
+    name = 'AV_SYNC_DATA_BLOCK'
+    start = 0x2D
+    end = 0x2D
+    def parse(self):
+        self.add_result('AUD_DEL_INS[23:16]', 0, 0, 7)
+
+
+class ReceiverCapFieldAdvanceLinkPowerMgrCap(PrintReserved):
+    name = 'RECEIVER_ADVANCED_LINK_POWER_MANAGEMENT_CAPABILITES'
+    start = 0x2E
+    end = 0x2E
+class ReceiverCapFieldAuxFrameSync(RangeParser):
+    name = 'AUX_FRAME_SYNC'
+    start = 0x2F
+    end = 0x2F
+
+    def parse(self):
+        self.add_result('See eDP v1.4.', 0, 0, 7)
+
+class ReceiverCapFieldGUID(RangeParser):
+    name = 'GUID'
+    start = 0x30
+    end = 0x3F
+
+    def parse(self):
+        self.add_result('GUID0', 0, 0, 7)
+        self.add_result('GUID1', 1, 0, 7)
+        self.add_result('GUID2', 2, 0, 7)
+        self.add_result('GUID3', 3, 0, 7)
+        self.add_result('GUID4', 4, 0, 7)
+        self.add_result('GUID5', 5, 0, 7)
+        self.add_result('GUID6', 6, 0, 7)
+        self.add_result('GUID7', 7, 0, 7)
+        self.add_result('GUID8', 8, 0, 7)
+        self.add_result('GUID9', 9, 0, 7)
+        self.add_result('GUID10', 10, 0, 7)
+        self.add_result('GUID11', 11, 0, 7)
+        self.add_result('GUID12', 12, 0, 7)
+        self.add_result('GUID13', 13, 0, 7)
+        self.add_result('GUID14', 14, 0, 7)
+        self.add_result('GUID15', 15, 0, 7)
+class ReceiverCapFieldDockPortCap(PrintReserved):
+    name = 'DOCKPORT_CAP'
+    start = 0x40
+    end = 0x40
+class ReceiverCapFieldDisplayPortSpecVerMaj(PrintReserved):
+    name = 'DisplayPort SpecVerMaj'
+    start = 0x41
+    end = 0x41
+class ReceiverCapFieldDisplayPortSpecVerMin(PrintReserved):
+    name = 'DisplayPort SpecVerMin'
+    start = 0x42
+    end = 0x42
+class ReceiverCapFieldDisplayPortReserved(PrintReserved):
+    name = 'Reserved'
+    start = 0x43
+    end = 0x53
+
+class ReceiverCapFieldRxGtcValue0(RangeParser):
+    name = 'RX_GTC_VALUE_0'
+    start = 0x54
+    end = 0x54
+
+    def parse(self):
+        self.add_result('RX_GTC_VALUE7:0', 0, 7)
+class ReceiverCapFieldRxGtcValue1(RangeParser):
+    name = 'RX_GTC_VALUE_1'
+    start = 0x55
+    end = 0x55
+
+    def parse(self):
+        self.add_result('RX_GTC_VALUE15:8', 0, 7)
+class ReceiverCapFieldRxGtcValue2(RangeParser):
+    name = 'RX_GTC_VALUE_1'
+    start = 0x56
+    end = 0x56
+
+    def parse(self):
+        self.add_result('RX_GTC_VALUE23:16', 0, 7)
+class ReceiverCapFieldRxGtcValue3(RangeParser):
+    name = 'RX_GTC_VALUE_3'
+    start = 0x57
+    end = 0x57
+
+    def parse(self):
+        self.add_result('RX_GTC_VALUE31:24', 0, 7)
+class ReceiverCapFieldRxGtcMstrReq(RangeParser):
+    name = 'RX_GTC_MSTR_REQ'
+    start = 0x58
+    end = 0x58
+
+    def parse(self):
+        self.add_result('RX_GTC_MSTR_REQ', 0, 0, 1, lambda x: "RX {}  request to be a GTC Master".format('' if x else "does not"))
+        self.add_result('TX_GTC_VALUE_PHASE_SKEW_EN', 0, 1, 1, lambda x: "{}".format('the RX_GTC_VALUE is used for phase adjust only' if x else "DPTX resets its GTC value to the received RX_GTC_VALUE"))
+        self.add_result('Reserved', 0, 2, 7)
+class ReceiverCapFieldRXGtcFreqLockDone(RangeParser):
+    name = 'RX_GTC_FREQ_LOCK_DONE'
+    start = 0x59
+    end = 0x59
+
+    def parse(self):
+        self.add_result('RX_GTC_FREQ_LOCK_DONE', 0, 0, 0, lambda x:'DPRX has {}  realized the GTC_FREQ_LOCK_DONE'.format('' if x else "not"))
+        self.add_result('Reserved', 0, 1, 7)
+
+class ReceiverCapFieldRxGtcPhaseSkewOffset0(RangeParser):
+    name = 'RX_GTC_PHASE_SKEW_OFFSET_0'
+    start = 0x5A
+    end = 0x5A
+
+    def parse(self):
+        self.add_result('RX_GTC_PHASE_SKEW_OFFSET7:0', 0, 0, 7)
+class ReceiverCapFieldRxGtcPhaseSkewOffset1(RangeParser):
+    name = 'RX_GTC_PHASE_SKEW_OFFSET_1'
+    start = 0x5B
+    end = 0x5B
+
+    def parse(self):
+        self.add_result('RX_GTC_PHASE_SKEW_OFFSET15:8', 0, 0, 7)
+
+class ReceiverCapFieldReserved5C_5F(PrintReserved):
+    name = 'Reserved'
+    start = 0x5C
+    end = 0x5F
+class ReceiverCapFieldDSCSupport(RangeParser):
+    name = 'DSC SUPPORT'
+    start = 0x60
+    end = 0x60
+
+    def parse(self):
+        self.add_result('', 0, 0, printfn=lambda x:'Decompression using DSC is {} supported'.format('' if x else "Not"))
+        self.add_result('DSC Support', 0, 1, 7)
+class ReceiverCapFieldDSCAlgorithmRev(RangeParser):
+    name = 'DSC ALGORITHM REVISION'
+    start = 0x61
+    end = 0x61
+
+    def parse(self):
+        self.add_result('DSC Version Major', 0, 0, 3)
+        self.add_result('DSC Version Minor', 0, 4, 7)
+class ReceiverCapFieldDSCRcBufferBlockSize(RangeParser):
+    name = 'DSC RC BUFFER BLOCK SIZE'
+    start = 0x62
+    end = 0x62
+
+    rc_buf_sz = {
+        0b00: "1",
+        0b01: "4",
+        0b10: "16",
+        0b11: "64",
+    }
+    def rc_buffer(self, value):
+        return "{}KB".format(self.rc_buf_sz.get(value, "Null"))
+    def parse(self):
+        self.add_result('RC Buffer Block Size', 0, 0, 1, self.rc_buffer)
+        self.add_result('Reserved', 0, 2, 7)
+class ReceiverCapFieldDSCRcBufferSz(RangeParser):
+    name = 'DSC RC BUFFER SIZE'
+    start = 0x63
+    end = 0x63
+
+    def parse(self):
+        self.add_result('Each Rate Buffer Size, in Units of Blocks', 0, 0, 7)
+class ReceiverCapFieldDSCSliceCap1(RangeParser):
+    name = 'DSC SLICE CAPABILITIES 1'
+    start = 0x64
+    end = 0x64
+
+    def parse(self):
+        self.add_result('1 Slice per Display Line', 0, 0, 0)
+        self.add_result('2 Slice per Display Line', 0, 1, 1)
+        self.add_result('Reserved', 0, 2, 2)
+        self.add_result('4 Slice per Display Line', 0, 3, 3)
+        self.add_result('6 Slice per Display Line', 0, 4, 4)
+        self.add_result('8 Slice per Display Line', 0, 5, 5)
+        self.add_result('10 Slice per Display Line', 0, 6, 6)
+        self.add_result('12 Slice per Display Line', 0, 7, 7)
+class ReceiverCapFieldDSCLineBufferBITdepth(RangeParser):
+    name = 'DSC LINE BUFFER BIT DEPTH'
+    start = 0x65
+    end = 0x65
+
+    line_buf_bit_depth = {
+        0b0000: "9",
+        0b0001: "10",
+        0b0010: "11",
+        0b0011: "12",
+        0b0100: "13",
+        0b0101: "14",
+        0b0110: "15",
+        0b0111: "16",
+        0b1000: "8",
+    }
+    def get_line_buf(self, value):
+        return "{} bits".format(self.line_buf_bit_depth.get(value, "RESERVED"))
+    def parse(self):
+        self.add_result('1 Slice per Display Line', 0, 0, 3, self.get_line_buf)
+        self.add_result('RESERVED', 0, 4, 7)
+class ReceiverCapFieldDSCBlockPredictionSupport(RangeParser):
+    name = 'DSC BLOCK PREDICTION SUPPORT'
+    start = 0x66
+    end = 0x66
+
+    def parse(self):
+        self.add_result('Block Prediction Support', 0, 0, printfn=lambda x:"Block prediction is {} supported".format('' if x else "Not"))
+        self.add_result('RESERVED', 0, 1, 7)
+class ReceiverCapFieldMaximumBitPerPixelSupportedByTheDecompressor(RangeParser):
+    name = 'Maximum Bit Per Pixel Supported By The Decompressor'
+    start = 0x67
+    end = 0x68
+    def parse(self):
+        self.add_result('bits_per_pixel7:0', 0, 0, 7)
+        self.add_result('bits_per_pixel9:8', 1, 0, 1)
+        self.add_result('RESERVED', 1, 2, 7)
+class ReceiverCapFielddscColorFormatCap(RangeParser):
+    name = 'DSC COLOR FORMAT CAPABILITIES'
+    start = 0x69
+    end = 0x69
+
+    yuv422_support = {
+        0b00: "Not",
+        0b01: " ",
+        0b10: " ",
+        0b11: "Reserved"
+    }
+    def get_yuv422_support(self, value):
+        return "YCbCr 4:2:2 is {}supported".format(self.yuv422_support.get(value, "RESERVED"))
+
+    def parse(self):
+        self.add_result('RGB Support', 0, 0, 1, lambda x :"RGB is {} supported".format(''if x else "not"))
+        self.add_result('YCbCr 4:4:4 Support', 0, 1, 1, lambda x:"{} supported".format('' if x else "Not"))
+        self.add_result('YCbCr 4:2:2 Support', 0, 2, 3, self.get_yuv422_support)
+        self.add_result('YCbCr 4:2:0 Support', 0, 4, 4,lambda x: " YCbCr 4:2:0 is {} supported".format("" if x else "not"))
+        self.add_result('Reserved', 0, 5, 7)
+class ReceiverCapFieldDSCColordepthCap(RangeParser):
+    name = 'DSC COLOR DEPTH CAPABILITIES'
+    start = 0x6A
+    end = 0x6A
+
+    def parse(self):
+        self.add_result('Reserved', 0, 0, 0)
+        self.add_result('8 Bits per Color Support', 0, 1, 1)
+        self.add_result('10 Bits per Color Support', 0, 2, 2)
+        self.add_result('12 Bits per Color Support', 0, 3, 3)
+        self.add_result('Reserved', 0, 4, 4)
+        self.add_result('16 Bits per Color Support', 0, 5, 5)
+        self.add_result('Reserved', 0, 6, 7)
+class ReceiverCapFieldPeakDSCThroughput(RangeParser):
+    name = 'Peak DSC Throughput (DSC Sink)'
+    start = 0x6B
+    end = 0x6B
+
+    throughput_mode = {
+        0:"340",
+        1:"400",
+        2:"340",
+        3:"450",
+        4:"500",
+        5:"550",
+        6:"600",
+        7:"650",
+        8:"700",
+        9:"750",
+        10:"800",
+        11:"850",
+        12:"900",
+        13:"950",
+        14:"1000",
+        15:"RESERVED",
+    }
+    def get_throughput_mode(self, val):
+        return "{}MP/s".format(self.throughput_mode.get(val, "RESERVED"))
+    def parse(self):
+        self.add_result('Throughput Mode 0', 0, 0, 3, self.get_throughput_mode)
+        self.add_result('Throughput Mode 1', 0, 4, 7, self.get_throughput_mode)
+class ReceiverCapFieldPeakDSCSliceCap2(RangeParser):
+    name = 'DSC SLICE CAPABILITIES 2'
+    start = 0x6D
+    end = 0x6D
+
+    def parse(self):
+        self.add_result('16 Slices per Display Line', 0, 0, 0)
+        self.add_result('20 Slices per Display Line', 0, 1, 1)
+        self.add_result('24 Slices per Display Line', 0, 2, 2)
+        self.add_result('RESERVED', 0, 3, 7)
+class ReceiverCapFieldPeakDSCMaximumSliceWidth(RangeParser):
+    name = 'DSC Maximum Slice Width'
+    start = 0x6C
+    end = 0x6C
+
+    def parse(self):
+        self.add_result('DSC Max Slice Width(MaxSliceWidth = Number of pixels x 320.)', 0, 0, 7)
+class ReceiverCapFieldPeakDSCminmumBitsPerPixelSupportByTheDecompressor(RangeParser):
+    name = 'MINIMUM bits_per_pixel SUPPORTED BY THE DECOMPRESSOR'
+    start = 0x6E
+    end = 0x6F
+
+    increment_value_map = {
+        0b000 : "1/16",
+        0b001 : "1/8",
+        0b010 : "1/4",
+        0b011 : "1/2",
+        0b100 : "Integer values only for bits per pixel",
+    }
+    def get_increment_val(self, value):
+        return "{}bpp".format(self.increment_value_map.get(value, "Null"))
+    def parse(self):
+        self.add_result('bits_per_pixel7:0', 0, 0, 7)
+        self.add_result('bits_per_pixel9:8', 1, 0, 1)
+        self.add_result('Reserved', 1, 2, 3)
+        self.add_result('INCREMENT OF bits_per_pixel SUPPORTED BY THE DECOMPRESSOR', 1, 4, 6, self.get_increment_val)
+        self.add_result('RESERVED', 1, 7, 7)
+class ReceiverCapFieldPanelSelfRefreshCapAndVersion(RangeParser):
+    name =  "PANEL SELF REFRESH CAPABILITY SUPPORTED AND VERSION"
+    start = 0x70
+    end = 0x70
+
+    def parse(self):
+        self.add_result('See eDP v1.4', 0, 0, 7)
+class ReceiverCapFieldPanelSelfRefreshCap(RangeParser):
+    name =  "PANEL SELF REFRESH CAPABILITY"
+    start = 0x71
+    end = 0x71
+
+    def parse(self):
+        self.add_result('See eDP v1.4', 0, 0, 7)
+class ReceiverCapFieldReserved72_7F(PrintReserved):
+    name =  "RESERVED"
+    start = 0x72
+    end = 0x7F
+
 class RangeDetailedCapInfoDFP0(RangeDetailedCapInfo):
     name = 'Downstream Facing Port 0 Capabilities'
     start = 0x80
@@ -788,12 +1221,6 @@ class LinkConfigFieldLinkQualLane3Set(LinkConfigFieldLinkQualLane):
     name = 'LINK_QUAL_LANE3_SET'
     start = 0x10E
     end = 0x10E
-
-
-class PrintReserved(RangeParser):
-    def parse(self):
-        self.add_result('Reserved', 0, 0, 7)
-
 
 class LinkConfigFieldReserved(PrintReserved):
     name = 'Reserved'
